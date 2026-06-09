@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TableFlow.Api/TableFlow.Api.csproj" />
+  <Project Path="TableFlow.Web/TableFlow.Web.csproj" />
+</Solution>

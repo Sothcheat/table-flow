@@ -1,0 +1,21 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using TableFlow.Web.Components.Shared
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                <RedirectToLogin />
+            </NotAuthorized>
+            <Authorizing>
+
+            </Authorizing>
+        </AuthorizeRouteView>
+        @* <FocusOnNavigate RouteData="routeData" Selector="h1" /> *@
+    </Found>
+    <NotFound>
+        <PageTitle>Not Found</PageTitle>
+        <LayoutView Layout="typeof(MainLayout)">
+            <MudText Typo="Typo.h5">Page not found.</MudText>
+        </LayoutView>
+    </NotFound>
+</Router>

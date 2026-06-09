@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: tableflow_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tableflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - tableflow_data_18:/var/lib/postgresql
+
+volumes:
+  tableflow_data_18:

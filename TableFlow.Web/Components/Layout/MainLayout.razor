@@ -1,0 +1,116 @@
+﻿@inherits LayoutComponentBase
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@using TableFlow.Web.Auth
+
+<MudThemeProvider Theme="@TableFlowTheme.Theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    @* App bar — hides brand+hamburger on small screens *@
+    <MudAppBar Elevation="1" Color="Color.Primary" Fixed="true">
+        @* Hamburger — only on medium and up (desktop) *@
+        <MudHidden Breakpoint="Breakpoint.Xs">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                           Color="Color.Inherit"
+                           Edge="Edge.Start"
+                           OnClick="ToggleDrawer" />
+        </MudHidden>
+        @* Brand — only on medium and up (desktop) *@
+        <MudHidden Breakpoint="Breakpoint.Xs">
+            <MudText Typo="Typo.h6" Class="ml-2">TableFlow</MudText>
+        </MudHidden>
+        <MudSpacer />
+        <MudText Typo="Typo.body2" Class="mr-3">@_userName</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Logout"
+                       Color="Color.Inherit"
+                       OnClick="LogoutAsync"
+                       Title="Logout" />
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen"
+               Elevation="0"
+               Variant="@DrawerVariant.Responsive"
+               Color="Color.Primary"
+               ClipMode="DrawerClipMode.Always" Overlay="false">
+
+        @* Drawer header — only on small screens *@
+        <MudHidden Breakpoint="Breakpoint.SmAndUp">
+            <MudDrawerHeader Class="d-flex align-center pa-2">
+                <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                               Color="Color.Inherit"
+                               OnClick="ToggleDrawer" />
+                <MudText Typo="Typo.h6" Color="Color.Inherit" Class="ml-2">
+                    TableFlow
+                </MudText>
+            </MudDrawerHeader>
+        </MudHidden>
+
+        <MudNavMenu Color="Color.Inherit">
+            <AuthorizeView Roles="Admin">
+                <MudNavLink Href="/admin"
+                            Icon="@Icons.Material.Filled.AdminPanelSettings"
+                            Match="NavLinkMatch.Prefix"
+                            IconColor="Color.Inherit">
+                    Admin Dashboard
+                </MudNavLink>
+            </AuthorizeView>
+
+            <AuthorizeView Roles="Cashier">
+                <MudNavLink Href="/cashier"
+                            Icon="@Icons.Material.Filled.PointOfSale"
+                            Match="NavLinkMatch.Prefix"
+                            IconColor="Color.Inherit">
+                    Cashier
+                </MudNavLink>
+            </AuthorizeView>
+
+            <AuthorizeView Roles="Kitchen">
+                <MudNavLink Href="/kitchen"
+                            Icon="@Icons.Material.Filled.Kitchen"
+                            Match="NavLinkMatch.Prefix"
+                            IconColor="Color.Inherit">
+                    Kitchen
+                </MudNavLink>
+            </AuthorizeView>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private string _userName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            _userName = user.Identity.Name ?? string.Empty;
+        }
+    }
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private async Task LogoutAsync()
+    {
+        var provider = AuthStateProvider as CustomAuthStateProvider;
+        if (provider is not null)
+            await provider.LogoutAsync();
+
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}
