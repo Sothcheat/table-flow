@@ -1,0 +1,26 @@
+﻿@page "/admin"
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+@inject NavigationManager Navigation
+
+<PageTitle>Admin — TableFlow</PageTitle>
+
+<MudText Typo="Typo.h2" Class="mb-6" Style="font-weight:bold">Admin Dashboard</MudText>
+
+<MudGrid>
+    <MudItem xs="12" sm="6" md="4">
+        <MudPaper Elevation="2"
+                  Class="pa-6 d-flex flex-column align-center justify-center"
+                  Style="cursor:pointer; min-height:140px"
+                  @onclick="@(() => Navigation.NavigateTo("/admin/users"))">
+            <MudIcon Icon="@Icons.Material.Filled.People"
+                     Color="Color.Primary"
+                     Size="Size.Large"
+                     Class="mb-2" />
+            <MudText Typo="Typo.h4" Style="font-weight:600" Class="pb-1">Staff Management</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Manage cashier and kitchen accounts
+            </MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>

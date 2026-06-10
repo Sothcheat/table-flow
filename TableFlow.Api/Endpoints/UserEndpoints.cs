@@ -88,6 +88,17 @@ namespace TableFlow.Api.Endpoints
                 await userManager.RemoveFromRolesAsync(user, currentRoles);
                 await userManager.AddToRoleAsync(user, req.Role);
 
+                if (!string.IsNullOrEmpty(req.NewPassword))
+                {
+                    var removeResult = await userManager.RemovePasswordAsync(user);
+                    if (!removeResult.Succeeded)
+                        return Results.BadRequest(removeResult.Errors.Select(e => e.Description));
+
+                    var addResult = await userManager.AddPasswordAsync(user, req.NewPassword);
+                    if (!addResult.Succeeded)
+                        return Results.BadRequest(addResult.Errors.Select(e => e.Description));
+                }
+
                 return Results.Ok(new UserResponse(user.Id, user.FullName, user.Email!, req.Role));
             });
 

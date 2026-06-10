@@ -92,7 +92,7 @@ namespace TableFlow.Web.Themes
                 {
                     FontFamily = new[] { "Plus Jakarta Sans", "sans-serif" },
                     FontSize = "28px",
-                    FontWeight = "600",
+                    FontWeight = "700",
                     LineHeight = "1.2",
                     LetterSpacing = "-0.01em"
                 },

@@ -2,7 +2,7 @@
 {
     public record CreateUserRequest(string Fullname, string Email, string Password, string Role);
 
-    public record UpdateUserRequest(string Fullname, string Email, string Role);
+    public record UpdateUserRequest(string Fullname, string Email, string Role, string? NewPassword);
 
     public record UserResponse(string Id, string Fullname, string Email, string Role);
 

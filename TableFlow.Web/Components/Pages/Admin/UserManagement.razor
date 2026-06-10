@@ -1,0 +1,224 @@
+﻿@page "/admin/users"
+@attribute [Authorize(Roles = "Admin")]
+@inject UserApiService UserApi
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Authorization
+@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+
+<PageTitle>Staff Management — TableFlow</PageTitle>
+<MudButton StartIcon="@Icons.Material.Filled.ArrowBack"
+           Variant="Variant.Text"
+           Color="Color.Primary"
+           Class="mb-4"
+           OnClick="@(() => Navigation.NavigateTo("/admin"))">
+    Back to Dashboard
+</MudButton>
+<MudText Typo="Typo.h2" Class="mb-6" Style="font-weight:bold">Staff Management</MudText>
+
+<MudPaper Elevation="2" Class="pa-4">
+
+    @* Toolbar *@
+    <MudStack Row="true"
+              AlignItems="AlignItems.Center"
+              Justify="Justify.SpaceBetween"
+              Class="mb-4">
+        <MudText Typo="Typo.h3" Style="font-weight:bold" Color="Color.Secondary">All Staff: @_users.Count()</MudText>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Size="Size.Medium"
+                   StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="OpenAddDialog">
+            Add Staff
+        </MudButton>
+    </MudStack>
+
+    @* Table *@
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (_users.Count == 0)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Info">
+            No staff accounts yet. Click Add Staff to create one.
+        </MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_users" Hover="true" Striped="true" Elevation="0">
+            <HeaderContent>
+                <MudTh>Name</MudTh>
+                <MudTh>Email</MudTh>
+                <MudTh Style="text-align:center">Role</MudTh>
+                <MudTh Style="text-align:center">Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Name">@context.FullName</MudTd>
+                <MudTd DataLabel="Email">@context.Email</MudTd>
+                <MudTd DataLabel="Role" Style="text-align:center">
+                    <MudChip T="string"
+                             Color="@(context.Role == "Cashier"
+                                                              ? Color.Primary : Color.Secondary)"
+                             Size="Size.Small">
+                        @context.Role
+                    </MudChip>
+                </MudTd>
+                <MudTd Style="text-align:center">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Size="Size.Small"
+                                   Color="Color.Primary"
+                                   OnClick="@(() => OpenEditDialog(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Size="Size.Small"
+                                   Color="Color.Error"
+                                   OnClick="@(() => DeleteUser(context))" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+
+</MudPaper>
+
+@code {
+    private List<StaffUserModel> _users = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        _loading = true;
+        try
+        {
+            _users = await UserApi.GetUsersAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load staff list.", MudBlazor.Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var model = new UserFormModel();
+        var parameters = new DialogParameters
+        {
+            { nameof(UserFormDialog.Model), model },
+            { nameof(UserFormDialog.IsEditMode), false }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<UserFormDialog>(
+            "Add Staff", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: UserFormModel formData })
+        {
+            var success = await UserApi.CreateUserAsync(new CreateUserModel
+            {
+                FullName = formData.FullName,
+                Email = formData.Email,
+                Password = formData.Password,
+                Role = formData.Role
+            });
+
+            if (success)
+            {
+                Snackbar.Add("Staff member created.", MudBlazor.Severity.Success);
+                await LoadUsers();
+            }
+            else
+            {
+                Snackbar.Add("Failed to create staff member.", MudBlazor.Severity.Error);
+            }
+        }
+    }
+
+    private async Task OpenEditDialog(StaffUserModel user)
+    {
+        var model = new UserFormModel
+        {
+            FullName = user.FullName,
+            Email = user.Email,
+            Role = user.Role,
+            IsEditMode = true
+        };
+
+        var parameters = new DialogParameters
+        {
+            { nameof(UserFormDialog.Model), model },
+            { nameof(UserFormDialog.IsEditMode), true }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<UserFormDialog>(
+            "Edit Staff", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: UserFormModel formData })
+        {
+            var success = await UserApi.UpdateUserAsync(user.Id, new UpdateUserModel
+            {
+                FullName = formData.FullName,
+                Email = formData.Email,
+                Role = formData.Role,
+                NewPassword = formData.NewPassword
+            });
+
+            if (success)
+            {
+                Snackbar.Add("Staff member updated.", MudBlazor.Severity.Success);
+                await LoadUsers();
+            }
+            else
+            {
+                Snackbar.Add("Failed to update staff member.", MudBlazor.Severity.Error);
+            }
+        }
+    }
+
+    private async Task DeleteUser(StaffUserModel user)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Delete Staff",
+            $"Are you sure you want to delete {user.FullName}?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            var success = await UserApi.DeleteUserAsync(user.Id);
+            if (success)
+            {
+                Snackbar.Add("Staff member deleted.", MudBlazor.Severity.Success);
+                await LoadUsers();
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete staff member.", MudBlazor.Severity.Error);
+            }
+        }
+    }
+}

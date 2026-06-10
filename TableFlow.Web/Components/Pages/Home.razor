@@ -1,7 +1,22 @@
 ﻿@page "/"
+@attribute [Authorize]
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
 
-<PageTitle>Home</PageTitle>
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
 
-<h1>Hello, world!</h1>
-
-Welcome to your new app.
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            if (user.IsInRole("Admin"))
+                Navigation.NavigateTo("/admin", forceLoad: false);
+            else if (user.IsInRole("Cashier"))
+                Navigation.NavigateTo("/cashier", forceLoad: false);
+            else if (user.IsInRole("Kitchen"))
+                Navigation.NavigateTo("/kitchen", forceLoad: false);
+        }
+    }
+}

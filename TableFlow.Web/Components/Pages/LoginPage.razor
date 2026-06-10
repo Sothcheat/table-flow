@@ -1,0 +1,170 @@
+﻿@page "/login"
+@layout LoginLayout
+@attribute [AllowAnonymous]
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject IHttpClientFactory HttpClientFactory
+@using Microsoft.AspNetCore.Identity
+@using TableFlow.Api.Data.Entities
+@using TableFlow.Web.Auth
+
+<PageTitle>Login — TableFlow</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small"
+              Class="d-flex align-center justify-center"
+              Style="min-height:100vh">
+    <MudPaper Elevation="3"
+              Class="pa-8 rounded-lg"
+              Style="width:100%;max-width:420px">
+
+        @* Brand *@
+        <MudText Typo="Typo.h1" Color="Color.Primary"
+                 Align="Align.Center" Class="mb-2">
+            <b>TableFlow</b>
+        </MudText>
+        <MudText Typo="Typo.h4" Align="Align.Center"
+                 Class="mb-10" Color="Color.Secondary">
+            Restaurant Management System
+        </MudText>
+
+        @* Server-level error (wrong password, DB error) *@
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="MudBlazor.Severity.Error" Class="mb-4" Dense="true">
+                @_errorMessage
+            </MudAlert>
+        }
+
+        @* EditForm — Blazilla requires EditForm, not MudForm *@
+        <EditForm Model="_model" OnValidSubmit="HandleLoginAsync">
+
+            @* This single line wires FluentValidation to all fields *@
+            <FluentValidator />
+
+            <MudTextField @bind-Value="_model.Email"
+                          For="@(() => _model.Email)"
+                          Label="Email"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Email"
+                          Class="mb-6"
+                          Disabled="_isLoading" />
+
+            <MudTextField @bind-Value="_model.Password"
+                          For="@(() => _model.Password)"
+                          Label="Password"
+                          Variant="Variant.Outlined"
+                          InputType="_showPassword ? InputType.Text : InputType.Password"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@(_showPassword
+                                                        ? Icons.Material.Filled.VisibilityOff
+                                                    : Icons.Material.Filled.Visibility)"
+                          OnAdornmentClick="() => _showPassword = !_showPassword"
+                          Class="mb-8"
+                          Disabled="_isLoading" />
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       Disabled="_isLoading">
+                @if (_isLoading)
+                {
+                    <MudProgressCircular Size="Size.Small"
+                                         Indeterminate="true"
+                                         Class="mr-2" />
+                    <span>Signing in...</span>
+                }
+                else
+                {
+                    <span>Sign In</span>
+                }
+            </MudButton>
+
+        </EditForm>
+
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private LoginModel _model = new();
+    private string _errorMessage = string.Empty;
+    private bool _isLoading = false;
+    private bool _showPassword = false;
+
+    private async Task HandleLoginAsync()
+    {
+        // FluentValidation already passed at this point
+        // OnValidSubmit only fires when all rules pass
+        _errorMessage = string.Empty;
+        _isLoading = true;
+
+        try
+        {
+            var user = await UserManager.FindByEmailAsync(_model.Email.Trim());
+            // if (user is null)
+            // {
+            //     _errorMessage = "Invalid email or password.";
+            //     return;
+            // }
+
+            // var result = await SignInManager.CheckPasswordSignInAsync(
+            //     user, _model.Password, lockoutOnFailure: false);
+
+            // if (!result.Succeeded)
+            // {
+            //     _errorMessage = "Invalid email or password.";
+            //     return;
+            // }
+            if (user is null)
+            {
+                _errorMessage = $"No user found with email: {_model.Email.Trim()}";
+                return;
+            }
+
+            var passwordValid = await UserManager.CheckPasswordAsync(user, _model.Password);
+            if (!passwordValid)
+            {
+                _errorMessage = "Invalid email or password.";
+                return;
+            }
+
+            var httpClient = HttpClientFactory.CreateClient("TableFlowApi");
+            var loginResponse = await httpClient.PostAsJsonAsync("/api/auth/login", new
+            {
+                Email = _model.Email.Trim(),
+                Password = _model.Password
+            });
+
+            if (!loginResponse.IsSuccessStatusCode)
+            {
+                _errorMessage = $"Login failed. Please try again. Status: {(int)loginResponse.StatusCode} - {loginResponse.ReasonPhrase}";
+                return;
+            }
+
+            var data = await loginResponse.Content.ReadFromJsonAsync<LoginResponseModel>();
+
+            var provider = AuthStateProvider as CustomAuthStateProvider;
+            if (provider is not null)
+                await provider.LoginAsync(user.Id, data!.Token);
+
+            var roles = await UserManager.GetRolesAsync(user);
+
+            if (roles.Contains("Admin"))
+                Navigation.NavigateTo("/admin", forceLoad: true);
+            else if (roles.Contains("Cashier"))
+                Navigation.NavigateTo("/cashier", forceLoad: true);
+            else if (roles.Contains("Kitchen"))
+                Navigation.NavigateTo("/kitchen", forceLoad: true);
+            else
+                Navigation.NavigateTo("/", forceLoad: true);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

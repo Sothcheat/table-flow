@@ -1,0 +1,128 @@
+﻿@using MudBlazor
+@using TableFlow.Web.Models
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h3" Style="font-weight:bold" Class="mt-2">
+            @(IsEditMode ? "Edit Staff" : "Add Staff")
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <CascadingValue Value="_editContext">
+            <MudTextField @bind-Value="Model.FullName"
+                          For="@(() => Model.FullName)"
+                          Label="Full Name"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Immediate="true" />
+
+            <MudTextField @bind-Value="Model.Email"
+                          For="@(() => Model.Email)"
+                          Label="Email"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Class="mb-4"
+                          Immediate="true" />
+
+            @if (!IsEditMode)
+            {
+                <MudTextField @bind-Value="Model.Password"
+                              For="@(() => Model.Password)"
+                              Label="Password"
+                              Variant="Variant.Outlined"
+                              InputType="_showPassword ? InputType.Text : InputType.Password"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showPassword
+                                                                                      ? Icons.Material.Filled.VisibilityOff
+                                                                  : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="() => _showPassword = !_showPassword"
+                              Class="mb-4"
+                              Immediate="true" />
+            }
+            else
+            {
+                <MudTextField @bind-Value="Model.NewPassword"
+                              For="@(() => Model.NewPassword)"
+                              Label="New Password (leave blank to keep current)"
+                              Variant="Variant.Outlined"
+                              InputType="_showPassword ? InputType.Text : InputType.Password"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showPassword
+                                                                                      ? Icons.Material.Filled.VisibilityOff
+                                                                  : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="() => _showPassword = !_showPassword"
+                              Class="mb-4"
+                              Immediate="true" />
+            }
+
+            <MudSelect @bind-Value="Model.Role"
+                       For="@(() => Model.Role)"
+                       Label="Role"
+                       Variant="Variant.Outlined"
+                       Class="mb-2">
+                <MudSelectItem Value="@("Cashier")">Cashier</MudSelectItem>
+                <MudSelectItem Value="@("Kitchen")">Kitchen</MudSelectItem>
+            </MudSelect>
+        </CascadingValue>
+    </DialogContent>
+
+    <DialogActions>
+        <MudItem Class="mb-2">
+            <MudButton OnClick="Cancel" Class="mr-3">Cancel</MudButton>
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       OnClick="SubmitForm" Class="mr-4">
+                @(IsEditMode ? "Save Changes" : "Create")
+            </MudButton>
+        </MudItem>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public UserFormModel Model { get; set; } = new();
+    [Parameter] public bool IsEditMode { get; set; } = false;
+
+    [Inject] UserFormValidator Validator { get; set; } = null!;
+
+    private EditContext _editContext = null!;
+    private ValidationMessageStore _messageStore = null!;
+    private bool _showPassword = false;
+
+    protected override void OnParametersSet()
+    {
+        Model.IsEditMode = IsEditMode;
+        if (_editContext == null)
+        {
+            _editContext = new EditContext(Model);
+            _messageStore = new ValidationMessageStore(_editContext);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void SubmitForm()
+    {
+        // Clear previous messages
+        _messageStore.Clear();
+        _editContext.NotifyValidationStateChanged();
+
+        // Run FluentValidation manually
+        var result = Validator.Validate(Model);
+
+        if (!result.IsValid)
+        {
+            // Push each error into the correct field
+            foreach (var error in result.Errors)
+            {
+                var field = _editContext.Field(error.PropertyName);
+                _messageStore.Add(field, error.ErrorMessage);
+            }
+            _editContext.NotifyValidationStateChanged();
+            return; // Stop here — don't close dialog
+        }
+
+        MudDialog.Close(DialogResult.Ok(Model));
+    }
+}
