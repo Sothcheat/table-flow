@@ -1,0 +1,351 @@
+﻿@page "/admin/menu"
+@attribute [Authorize(Roles = "Admin")]
+@inject MenuApiService MenuService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+@using Microsoft.AspNetCore.Authorization
+
+<PageTitle>Menu Management - TableFlow</PageTitle>
+<MudButton StartIcon="@Icons.Material.Filled.ArrowBack"
+           Variant="Variant.Text"
+           Color="Color.Primary"
+           Class="mb-4"
+           OnClick="@(() => Navigation.NavigateTo("/admin"))">
+    Back to Dashboard
+</MudButton>
+<MudText Typo="Typo.h2" Class="mb-6" Style="font-weight:bold">Menu Management</MudText>
+
+<MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+
+    <!-- ── TAB 1: CATEGORIES ── -->
+    <MudTabPanel Text="Categories" Style="font-weight:bold">
+        <MudStack Row="true" Class="ma-4" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudTextField Value="_searchText"
+                          Immediate="true"
+                          ValueChanged="@((string val) => _searchText = val)"
+                          Label="Search Categories"
+                          Placeholder="Search categories..."
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Clearable="true"
+                          Style="max-width: 300px;" />
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"        
+                       OnClick="OpenAddCategoryDialog">
+                Add Category
+            </MudButton>
+        </MudStack>
+
+        @if (_loadingCategories)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else
+        {
+            <MudTable Items="_filteredCategories" Hover="true" Striped="true" Dense="false">
+                <HeaderContent>
+                    <MudTh Style="font-weight:600">Name</MudTh>
+                    <MudTh Style="text-align:center; font-weight:600">Display Order</MudTh>
+                    <MudTh Style="text-align:center; font-weight:600">Items</MudTh>
+                    <MudTh Style="text-align:center; font-weight:600">Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.CategoryName</MudTd>
+                    <MudTd Style="text-align:center">@context.DisplayOrder</MudTd>
+                    <MudTd Style="text-align:center">@context.ItemCount</MudTd>
+                    <MudTd Style="text-align:center">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       OnClick="@(() => OpenEditCategoryDialog(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="@(() => DeleteCategoryAsync(context))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudTabPanel>
+
+    <!-- ── TAB 2: MENU ITEMS ── -->
+    <MudTabPanel Text="Menu Items" Style="font-weight:bold">
+        <MudStack Row="true" Class="ma-4" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudTextField Value="_searchText"
+                          Immediate="true"
+                          ValueChanged="@((string val) => _searchText = val)"
+                          Label="Search Items"
+                          Placeholder="Search items..."
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Clearable="true"
+                          Style="max-width: 300px;" />
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenAddMenuItemDialog">
+                Add Menu Item
+            </MudButton>
+        </MudStack>
+
+        
+
+        @if (_loadingItems)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else
+        {
+            <MudTable Items="_filteredItems" 
+                      Hover="true" 
+                      Striped="true" 
+                      Dense="true" 
+                      OnRowClick="@((TableRowClickEventArgs<MenuItemModel> args) => OpenItemPreviewDialog(args.Item))"
+                      Style="cursor:pointer;">
+                <HeaderContent>
+                    <MudTh Style="font-weight: 600">Name</MudTh>
+                    <MudTh Style="font-weight: 600">Category</MudTh>
+                    <MudTh Style="text-align:right; font-weight: 600">Base Price</MudTh>
+                    <MudTh Style="text-align:center; font-weight: 600">Available</MudTh>
+                    <MudTh Style="text-align:center; font-weight: 600">Has Variants</MudTh>
+                    <MudTh Style="text-align:center; font-weight: 600">Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.ItemName</MudTd>
+                    <MudTd>@context.CategoryName</MudTd>
+                    <MudTd Style="text-align:right">$@context.BasePrice.ToString("0.00")</MudTd>
+                    <MudTd Style="text-align:center">
+                        <MudChip T="string"
+                                 Color="@(context.IsAvailable ? Color.Success : Color.Default)"
+                                 Size="Size.Small">
+                            @(context.IsAvailable ? "Yes" : "No")
+                        </MudChip>
+                    </MudTd>
+                    <MudTd Style="text-align:center">
+                        <MudChip T="string"
+                                 Color="@(context.HasVarient ? Color.Info : Color.Default)"
+                                 Size="Size.Small">
+                            @(context.HasVarient ? "Yes" : "No")
+                        </MudChip>
+                    </MudTd>
+                    <MudTd Style="text-align:center">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       OnClick="@(() => OpenEditMenuItemDialog(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="@(() => DeleteMenuItemAsync(context))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private List<CategoryModel> _categories = new();
+    private List<MenuItemModel> _menuItems = new();
+    private bool _loadingCategories = true;
+    private bool _loadingItems = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadCategoriesAsync(), LoadMenuItemsAsync());
+    }
+
+    // ── LOAD ─────────────────────────────────────────────────────────
+
+    private async Task LoadCategoriesAsync()
+    {
+        _loadingCategories = true;
+        _categories = await MenuService.GetCategoriesAsync();
+        _loadingCategories = false;
+    }
+
+    private async Task LoadMenuItemsAsync()
+    {
+        _loadingItems = true;
+        _menuItems = await MenuService.GetMenuItemsAsync();
+        _loadingItems = false;
+    }
+
+    private string _searchText = string.Empty;
+
+    private IEnumerable<MenuItemModel> _filteredItems =>
+        string.IsNullOrWhiteSpace(_searchText)
+            ? _menuItems
+            : _menuItems.Where(i =>
+                i.ItemName.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                i.CategoryName.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<CategoryModel> _filteredCategories =>
+        string.IsNullOrWhiteSpace(_searchText)
+            ? _categories
+            : _categories.Where(i =>
+                i.CategoryName.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                i.CategoryName.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+
+    // ── CATEGORY DIALOGS ─────────────────────────────────────────────
+
+    private async Task OpenAddCategoryDialog()
+    {
+        var parameters = new DialogParameters<CategoryFormDialog>
+        {
+            { x => x.Category, null},
+            { x => x.Title, "Add Category"},
+            { x => x.NextDisplayOrder, _categories.Count > 0
+                ? _categories.Max(c => c.DisplayOrder) + 1
+                : 1 },
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CategoryFormDialog>("", parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadCategoriesAsync();
+    }
+
+    private async Task OpenEditCategoryDialog(CategoryModel category)
+    {
+        var parameters = new DialogParameters<CategoryFormDialog>
+        {
+            { x => x.Category, category },
+            { x => x.Title, "Edit Category" },
+            { x => x.NextDisplayOrder, category.DisplayOrder}
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CategoryFormDialog>("", parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadCategoriesAsync();
+    }
+
+    private async Task DeleteCategoryAsync(CategoryModel category)
+    {
+        if (category.ItemCount > 0)
+        {
+            Snackbar.Add($"Cannot delete '{category.CategoryName}' — it has {category.ItemCount} item(s). Remove or reassign them first.", MudBlazor.Severity.Warning);
+            return;
+        }
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Delete Category",
+            $"Delete '{category.CategoryName}'? This cannot be undone.",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            var success = await MenuService.DeleteCategoryAsync(category.Id);
+            Snackbar.Add(success ? "Category deleted." : "Failed to delete category.", success ? MudBlazor.Severity.Success : MudBlazor.Severity.Error);
+            if (success) await LoadCategoriesAsync();
+        }
+    }
+
+    // ── MENU ITEM DIALOGS ────────────────────────────────────────────
+
+    private async Task OpenAddMenuItemDialog()
+    {
+        var parameters = new DialogParameters<MenuItemFormDialog>
+        {
+            { x => x.MenuItem, null},
+            { x => x.Title, "Add Menu Item"},
+            { x => x.Categories, _categories }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<MenuItemFormDialog>("", parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: MenuItemModel created })
+        {
+            var cat = _categories.FirstOrDefault(c => c.Id == created.CategoryId);
+            if (cat is not null)
+            {
+                var index = _categories.IndexOf(cat);
+                _categories[index] = cat with { ItemCount = cat.ItemCount + 1 };
+            }
+
+            await LoadMenuItemsAsync();
+        }
+    }
+
+    private async Task OpenEditMenuItemDialog(MenuItemModel item)
+    {
+        var parameters = new DialogParameters<MenuItemFormDialog>
+        {
+            { x => x.Categories, _categories },
+            { x => x.Title, "Edit Menu Item"},
+            { x => x.MenuItem, item }
+        };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<MenuItemFormDialog>("", parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: MenuItemModel updated })
+        {
+            if (updated.CategoryId != item.CategoryId)
+            {
+                var oldCat = _categories.FirstOrDefault(c => c.Id == item.CategoryId);
+                if (oldCat is not null)
+                {
+                    var i = _categories.IndexOf(oldCat);
+                    _categories[i] = oldCat with { ItemCount = oldCat.ItemCount - 1 };
+                }
+
+                var newCat = _categories.FirstOrDefault(c => c.Id == updated.CategoryId);
+                if (newCat is not null)
+                {
+                    var i = _categories.IndexOf(newCat);
+                    _categories[i] = newCat with { ItemCount = newCat.ItemCount + 1 };
+                }
+            }
+
+            await LoadMenuItemsAsync();
+        }
+    }
+
+    private async Task DeleteMenuItemAsync(MenuItemModel item)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Delete Menu Item",
+            $"Delete '{item.ItemName}'? This cannot be undone.",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            var success = await MenuService.DeleteMenuItemAsync(item.Id);
+            Snackbar.Add(success ? "Menu item deleted." : "Failed to delete menu item.", success ? MudBlazor.Severity.Success : MudBlazor.Severity.Error);
+
+            if (success)
+            {
+                var cat = _categories.FirstOrDefault(c => c.Id == item.CategoryId);
+                if (cat is not null)
+                {
+                    var index = _categories.IndexOf(cat);
+                    _categories[index] = cat with { ItemCount = cat.ItemCount - 1 };
+                }
+                await LoadMenuItemsAsync();
+            }
+        }
+    }
+
+    private async Task OpenItemPreviewDialog(MenuItemModel item)
+    {
+        var parameters = new DialogParameters<MenuItemPreviewDialog>
+        {
+            { x => x.Item, item }
+        };
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+        await DialogService.ShowAsync<MenuItemPreviewDialog>("", parameters, options);
+    }
+}

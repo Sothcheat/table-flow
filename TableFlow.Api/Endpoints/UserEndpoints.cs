@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using TableFlow.Api.Data.Entities;
 using TableFlow.Api.DTOs;
 
@@ -118,9 +117,5 @@ namespace TableFlow.Api.Endpoints
                 return Results.NoContent();
             });
         }
-
-
-
-
     }
 }

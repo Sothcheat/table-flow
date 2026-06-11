@@ -75,6 +75,8 @@ builder.Services.AddSingleton<IValidator<LoginModel>, LoginValidator>();
 
 builder.Services.AddScoped<UserApiService>();
 
+builder.Services.AddScoped<MenuApiService>();
+
 builder.Services.AddScoped<UserFormValidator>();
 
 var app = builder.Build();

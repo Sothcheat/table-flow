@@ -1,0 +1,449 @@
+﻿@inject MenuApiService MenuService
+@inject ISnackbar Snackbar
+@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+
+<MudDialog Style="min-width: 560px;">
+    <TitleContent>
+        <MudText Typo="Typo.h3" Style="font-weight:700;" Class="pt-2">
+            @Title
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+
+        <MudGrid Spacing="2">
+
+            <!-- Item Name — full width -->
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_form.ItemName"
+                              Label="Item Name"
+                              Variant="Variant.Outlined"
+                              FullWidth="true"
+                              Error="@(_errors.ContainsKey("ItemName"))"
+                              ErrorText="@(_errors.GetValueOrDefault("ItemName"))" />
+            </MudItem>
+
+            <!-- Base Price + Category — side by side -->
+            <MudItem xs="12" sm="6">
+                <MudNumericField @bind-Value="_form.BasePrice"
+                                 Label="@(_form.HasVarient ? "Base Price (Auto)" : "Base Price ($)")"
+                                 Variant="Variant.Outlined"
+                                 FullWidth="true"
+                                 Min="0m"
+                                 Format="0.00"
+                                 ReadOnly="@(_form.HasVarient)"
+                                 Error="@(_errors.ContainsKey("BasePrice"))"
+                                 ErrorText="@(_errors.GetValueOrDefault("BasePrice"))" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect @bind-Value="_form.CategoryId"
+                           Label="Category"
+                           Variant="Variant.Outlined"
+                           FullWidth="true"
+                           Error="@(_errors.ContainsKey("CategoryId"))"
+                           ErrorText="@(_errors.GetValueOrDefault("CategoryId"))">
+
+                    @foreach (var cat in Categories)
+                    {
+                        <MudSelectItem Value="@cat.Id">@cat.CategoryName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <!-- Image URL — full width -->
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_form.ImageUrl"
+                              Label="Image URL (optional)"
+                              Variant="Variant.Outlined"
+                              FullWidth="true" />
+            </MudItem>
+
+            <!-- Is Available -->
+            <MudItem xs="12" sm="6" Class="mt-2">
+                <MudText Typo="Typo.h5" Style="font-weight:500" Class="mb-1">Available?</MudText>
+                <MudRadioGroup @bind-Value="_form.IsAvailable">
+                    <MudRadio Value="true" Color="Color.Success">Yes</MudRadio>
+                    <MudRadio Value="false" Color="Color.Default">No</MudRadio>
+                </MudRadioGroup>
+            </MudItem>
+
+            <!-- Has Variants -->
+            <MudItem xs="12" sm="6" Class="mt-2">
+                <MudText Typo="Typo.h5" Style="font-weight:500" Class="mb-1">Has Variants?</MudText>
+                <MudRadioGroup @bind-Value="_form.HasVarient">
+                    <MudRadio Value="true" Color="Color.Info">Yes</MudRadio>
+                    <MudRadio Value="false" Color="Color.Default">No</MudRadio>
+                </MudRadioGroup>
+            </MudItem>
+
+            <!-- Variant section — only shows when HasVarient = true -->
+            @if (_form.HasVarient)
+            {
+                <MudItem xs="12">
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.h4" Style="font-weight:600" Class="mb-2">Variants</MudText>
+
+                    <!-- Add new variant inline form -->
+                    <MudGrid Spacing="1">
+                        <MudItem xs="12" sm="5">
+                            <MudTextField @bind-Value="_newVarient.VarientName"
+                                          Label="Variant Name"
+                                          Variant="Variant.Outlined"
+                                          Dense="true"
+                                          Error="@(_errors.ContainsKey("VarientName"))"
+                                          ErrorText="@(_errors.GetValueOrDefault("VarientName"))" />
+                        </MudItem>
+                        <MudItem xs="12" sm="3">
+                            <MudNumericField @bind-Value="_newVarient.Price"
+                                             Label="Price ($)"
+                                             Variant="Variant.Outlined"
+                                             Dense="true"
+                                             Min="0m"
+                                             Format="0.00" />
+                        </MudItem>
+                        <MudItem xs="12" sm="2">
+                            <MudSelect @bind-Value="_newVarient.IsAvailable"
+                                       Label="Available"
+                                       Variant="Variant.Outlined"
+                                       Dense="true">
+                                <MudSelectItem Value="true">Yes</MudSelectItem>
+                                <MudSelectItem Value="false">No</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="2" Class="d-flex align-center">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       FullWidth="true"
+                                       OnClick="AddVarientAsync">
+                                + Add
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+
+                    <!-- Existing variants list -->
+                    @if (_varients.Count > 0)
+                    {
+                        <MudTable Items="_varients" Dense="true" Hover="true" Class="mt-2">
+                            <HeaderContent>
+                                <MudTh>Name</MudTh>
+                                <MudTh>Price</MudTh>
+                                <MudTh>Available</MudTh>
+                                <MudTh>Actions</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                @if (_editingVarient == context)
+                                {
+                                    <!-- Inline edit row -->
+                                    <MudTd>
+                                        <MudTextField @bind-Value="_editForm.VarientName"
+                                                      Variant="Variant.Outlined"
+                                                      Dense="true"
+                                                      Margin="Margin.Dense" />
+                                    </MudTd>
+                                    <MudTd>
+                                        <MudNumericField @bind-Value="_editForm.Price"
+                                                         Variant="Variant.Outlined"
+                                                         Dense="true"
+                                                         Margin="Margin.Dense"
+                                                         Min="0m"
+                                                         Format="0.00" />
+                                    </MudTd>
+                                    <MudTd>
+                                        <MudSelect @bind-Value="_editForm.IsAvailable"
+                                                   Variant="Variant.Outlined"
+                                                   Dense="true"
+                                                   Margin="Margin.Dense">
+                                            <MudSelectItem Value="true">Yes</MudSelectItem>
+                                            <MudSelectItem Value="false">No</MudSelectItem>
+                                        </MudSelect>
+                                    </MudTd>
+                                    <MudTd>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Check"
+                                                       Color="Color.Success"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => SaveEditVarientAsync(context))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                       Color="Color.Default"
+                                                       Size="Size.Small"
+                                                       OnClick="CancelEditVarient" />
+                                    </MudTd>
+                                }
+                                else
+                                {
+                                    <!-- Normal display row -->
+                                    <MudTd>@context.VarientName</MudTd>
+                                    <MudTd>$@context.Price.ToString("0.00")</MudTd>
+                                    <MudTd>
+                                        <MudChip T="string"
+                                                 Color="@(context.IsAvailable ? Color.Success : Color.Default)"
+                                                 Size="Size.Small">
+                                            @(context.IsAvailable ? "Yes" : "No")
+                                        </MudChip>
+                                    </MudTd>
+                                    <MudTd>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                       Color="Color.Primary"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => StartEditVarient(context))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                       Color="Color.Error"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => DeleteVarientAsync(context))" />
+                                    </MudTd>
+                                }
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                            No variants yet. Add one above.
+                        </MudText>
+                    }
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudItem Class="mb-2 mr-4">
+            <MudButton OnClick="Cancel" Class="mr-3">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="SubmitAsync"
+                       Disabled="_saving">
+                @(_saving ? "Saving..." : "Save")
+            </MudButton>
+        </MudItem>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public MenuItemModel? MenuItem { get; set; }       // null = Add, not null = Edit
+    [Parameter] public List<CategoryModel> Categories { get; set; } = new();
+    [Parameter] public string Title { get; set; } = "Menu Items";
+
+    private MenuItemFormModel _form = new();
+    private VarientFormModel _newVarient = new();
+    private List<VarientModel> _varients = new();
+    private Dictionary<string, string> _errors = new();
+    private bool _saving = false;
+    private VarientModel? _editingVarient = null;
+    private VarientFormModel _editForm = new();
+
+    protected override void OnParametersSet()
+    {
+        if (MenuItem is not null)
+        {
+            // Populate form from existing item
+            _form.ItemName = MenuItem.ItemName;
+            _form.BasePrice = MenuItem.BasePrice;
+            _form.IsAvailable = MenuItem.IsAvailable;
+            _form.HasVarient = MenuItem.HasVarient;
+            _form.ImageUrl = MenuItem.ImageUrl;
+            _form.CategoryId = MenuItem.CategoryId;
+
+            // Load existing variants into local list
+            _varients = MenuItem.Varients.ToList();
+        }
+        else
+        {
+            _form.CategoryId = Categories.FirstOrDefault()?.Id ?? 0;
+        }
+    }
+
+    private bool Validate()
+    {
+        _errors.Clear();
+        if (string.IsNullOrWhiteSpace(_form.ItemName))
+            _errors["ItemName"] = "Item name is required.";
+        if (_form.BasePrice <= 0)
+            _errors["BasePrice"] = "Price must be greater than 0.";
+        if (_form.CategoryId == 0)
+            _errors["CategoryId"] = "Please select a category.";
+        return _errors.Count == 0;
+    }
+
+    private bool ValidateNewVarient()
+    {
+        _errors.Remove("VarientName");
+        if (string.IsNullOrWhiteSpace(_newVarient.VarientName))
+        {
+            _errors["VarientName"] = "Variant name is required.";
+            return false;
+        }
+        return true;
+    }
+
+    // ── VARIANT ACTIONS ──────────────────────────────────────────────
+
+    private async Task AddVarientAsync()
+    {
+        if (!ValidateNewVarient()) return;
+
+        if (MenuItem is not null)
+        {
+            // Edit mode — fire API immediately
+            var created = await MenuService.CreateVarientAsync(MenuItem.Id, _newVarient);
+            if (created is not null)
+            {
+                _varients.Add(created);
+                AutoSetBasePrice();
+                _newVarient = new VarientFormModel();
+                Snackbar.Add("Variant added.", MudBlazor.Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to add variant.", MudBlazor.Severity.Error);
+            }
+        }
+        else
+        {
+            // Add mode — stage in memory, will be saved after item is created
+            _varients.Add(new VarientModel
+            {
+                Id = 0,
+                VarientName = _newVarient.VarientName,
+                Price = _newVarient.Price,
+                IsAvailable = _newVarient.IsAvailable
+            });
+            AutoSetBasePrice();
+            _newVarient = new VarientFormModel();
+        }
+    }
+
+    private async Task DeleteVarientAsync(VarientModel varient)
+    {
+        if (MenuItem is not null && varient.Id != 0)
+        {
+            // Edit mode — fire API immediately
+            var success = await MenuService.DeleteVarientAsync(MenuItem.Id, varient.Id);
+            if (success)
+            {
+                _varients.Remove(varient);
+                AutoSetBasePrice();
+                Snackbar.Add("Variant removed.", MudBlazor.Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to remove variant.", MudBlazor.Severity.Error);
+            }
+        }
+        else
+        {
+            // Add mode — just remove from staging list
+            _varients.Remove(varient);
+            AutoSetBasePrice();
+        }
+    }
+
+    private void AutoSetBasePrice()
+    {
+        if (_form.HasVarient && _varients.Count > 0)
+            _form.BasePrice = _varients.Min(v => v.Price);
+    }
+
+    private void StartEditVarient(VarientModel varient)
+    {
+        _editingVarient = varient;
+        _editForm.VarientName = varient.VarientName;
+        _editForm.Price = varient.Price;
+        _editForm.IsAvailable = varient.IsAvailable;
+    }
+
+    private void CancelEditVarient()
+    {
+        _editingVarient = null;
+        _editForm = new();
+    }
+
+    private async Task SaveEditVarientAsync(VarientModel varient)
+    {
+        if (string.IsNullOrWhiteSpace(_editForm.VarientName)) return;
+
+        if (MenuItem is not null && varient.Id != 0)
+        {
+            // Edit mode — fire API immediately
+            var updated = await MenuService.UpdateVarientAsync(MenuItem.Id, varient.Id, _editForm);
+            if (updated is not null)
+            {
+                var index = _varients.IndexOf(varient);
+                _varients[index] = updated;
+                Snackbar.Add("Variant updated.", MudBlazor.Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to update variant.", MudBlazor.Severity.Error);
+            }
+        }
+        else
+        {
+            // Add mode — update staging list in memory
+            var index = _varients.IndexOf(varient);
+            _varients[index] = new VarientModel
+            {
+                Id = varient.Id,
+                MenuItemId = varient.MenuItemId,
+                VarientName = _editForm.VarientName,
+                Price = _editForm.Price,
+                IsAvailable = _editForm.IsAvailable
+            };
+            Snackbar.Add("Variant updated.", MudBlazor.Severity.Success);
+        }
+
+        _editingVarient = null;
+        _editForm = new();
+    }
+
+    // ── SUBMIT ───────────────────────────────────────────────────────
+
+    private async Task SubmitAsync()
+    {
+        if (!Validate()) return;
+        _saving = true;
+
+        if (MenuItem is null)
+        {
+            // ADD flow
+            var created = await MenuService.CreateMenuItemAsync(_form);
+            if (created is not null)
+            {
+                // Now save staged variants using the new item Id
+                foreach (var v in _varients)
+                {
+                    await MenuService.CreateVarientAsync(created.Id, new VarientFormModel
+                    {
+                        VarientName = v.VarientName,
+                        Price = v.Price,
+                        IsAvailable = v.IsAvailable
+                    });
+                }
+                Snackbar.Add("Menu item created.", MudBlazor.Severity.Success);
+                MudDialog.Close(DialogResult.Ok(created));
+            }
+            else
+            {
+                Snackbar.Add("Failed to create menu item.", MudBlazor.Severity.Error);
+            }
+        }
+        else
+        {
+            // EDIT flow — variants already saved live, just update the item itself
+            var updated = await MenuService.UpdateMenuItemAsync(MenuItem.Id, _form);
+            if (updated is not null)
+            {
+                Snackbar.Add("Menu item updated.", MudBlazor.Severity.Success);
+                MudDialog.Close(DialogResult.Ok(updated));
+            }
+            else
+            {
+                Snackbar.Add("Failed to update menu item.", MudBlazor.Severity.Error);
+            }
+        }
+
+        _saving = false;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

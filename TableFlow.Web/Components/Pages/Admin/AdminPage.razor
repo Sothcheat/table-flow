@@ -7,20 +7,42 @@
 
 <MudText Typo="Typo.h2" Class="mb-6" Style="font-weight:bold">Admin Dashboard</MudText>
 
-<MudGrid>
+<MudGrid Spacing="4">
+
     <MudItem xs="12" sm="6" md="4">
         <MudPaper Elevation="2"
                   Class="pa-6 d-flex flex-column align-center justify-center"
-                  Style="cursor:pointer; min-height:140px"
+                  Style="cursor:pointer; min-height:140px;"
                   @onclick="@(() => Navigation.NavigateTo("/admin/users"))">
             <MudIcon Icon="@Icons.Material.Filled.People"
                      Color="Color.Primary"
                      Size="Size.Large"
                      Class="mb-2" />
-            <MudText Typo="Typo.h4" Style="font-weight:600" Class="pb-1">Staff Management</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">
+            <MudText Typo="Typo.h4" Style="font-weight:600;" Class="mb-1">
+                Staff Management
+            </MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
                 Manage cashier and kitchen accounts
             </MudText>
         </MudPaper>
     </MudItem>
+
+    <MudItem xs="12" sm="6" md="4">
+        <MudPaper Elevation="2"
+                  Class="pa-6 d-flex flex-column align-center justify-center"
+                  Style="cursor:pointer; min-height:140px;"
+                  @onclick="@(() => Navigation.NavigateTo("/admin/menu"))">
+            <MudIcon Icon="@Icons.Material.Filled.RestaurantMenu"
+                     Color="Color.Primary"
+                     Size="Size.Large"
+                     Class="mb-2" />
+            <MudText Typo="Typo.h4" Style="font-weight:600;" Class="mb-1">
+                Menu Management
+            </MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                Manage categories and menu items
+            </MudText>
+        </MudPaper>
+    </MudItem>
+
 </MudGrid>
