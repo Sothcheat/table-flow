@@ -1,0 +1,134 @@
+﻿@using TableFlow.Web.Models
+
+<MudDialog Style="min-width: 480px;">
+    <TitleContent>
+        <MudText Typo="Typo.h3" Style="font-weight:bold;" Class="pt-2">
+            Item Preview
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+
+            <!-- Hero Image -->
+            @if (!_imageLoaded && !_imageError)
+            {
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle"
+                             Height="480px"
+                             Width="100%" />
+            }
+
+            @if (!_imageError)
+            {
+                <img src="@Item.ImageUrl"
+                     style="width:100%; height:480px; object-fit:cover; border-radius:8px;
+                @(!_imageLoaded ? "display:none;" : "")"
+                     @onload="() => _imageLoaded = true"
+                     @onerror="() => { _imageError = true; _imageLoaded = true; }" />
+            }
+
+            @if (_imageError)
+            {
+                <MudPaper Elevation="0"
+                          Style="width:100%; height:480px; border-radius:8px;
+                    background:#f5f5f5; display:flex;
+                    align-items:center; justify-content:center;">
+                    <MudStack AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@Icons.Material.Filled.BrokenImage"
+                                 Size="Size.Large"
+                                 Color="Color.Default" />
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            No image available
+                        </MudText>
+                    </MudStack>
+                </MudPaper>
+            }
+
+            <!-- Item Info -->
+            <MudStack Spacing="1">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mt-2">
+                    <MudText Typo="Typo.h2" Style="font-weight:700;">@Item.ItemName</MudText>
+                    <MudChip T="string"
+                             Color="@(Item.IsAvailable ? Color.Success : Color.Default)"
+                             Size="Size.Small">
+                        @(Item.IsAvailable ? "Available" : "Unavailable")
+                    </MudChip>
+                </MudStack>
+
+                <MudText Typo="Typo.body2" Style="font-weight:500" Color="Color.Secondary">
+                    Category: @Item.CategoryName
+                </MudText>
+
+                <MudText Typo="Typo.h3" Style="font-weight:600; text-align:right" Class="mt-2">
+                    @(Item.HasVarient ? $"From ${Item.BasePrice:0.00}" : $"${Item.BasePrice:0.00}")
+                </MudText>
+            </MudStack>
+
+            <!-- Variants -->
+            @if (Item.HasVarient)
+            {
+                <MudDivider />
+                <MudText Typo="Typo.h4" Style="font-weight:600;">Variants</MudText>
+
+                @if (Item.Varients.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        No variants defined yet.
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="2">
+                        @foreach (var v in Item.Varients.OrderBy(v => v.Price))
+                        {
+                            <MudPaper Elevation="0"
+                                      Style="background:#f9f9f9; border-radius:6px; padding:10px 14px;">
+                                <MudStack Row="true"
+                                          AlignItems="AlignItems.Center"
+                                          Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.body1">@v.VarientName</MudText>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                        <MudText Typo="Typo.body1" Style="font-weight:500;">
+                                            $@v.Price.ToString("0.00")
+                                        </MudText>
+                                        <MudChip T="string"
+                                                 Color="@(v.IsAvailable ? Color.Success : Color.Default)"
+                                                 Size="Size.Small">
+                                            @(v.IsAvailable ? "Available" : "Unavailable")
+                                        </MudChip>
+                                    </MudStack>
+                                </MudStack>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" OnClick="Close" Class="mr-4 my-2">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public MenuItemModel Item { get; set; } = null!;
+
+    private bool _imageLoaded = false;
+    private bool _imageError = false;
+
+    protected override void OnParametersSet()
+    {
+        // Reset image state when item changes
+        _imageLoaded = false;
+        _imageError = false;
+
+        // If no image URL provided, go straight to error state
+        if (string.IsNullOrWhiteSpace(Item.ImageUrl))
+        {
+            _imageLoaded = true;
+            _imageError = true;
+        }
+    }
+
+    private void Close() => MudDialog.Cancel();
+}

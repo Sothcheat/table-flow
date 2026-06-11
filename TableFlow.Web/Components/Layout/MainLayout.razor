@@ -48,18 +48,25 @@
             </MudDrawerHeader>
         </MudHidden>
 
-        <MudNavMenu Color="Color.Inherit">
+        <MudNavMenu Color="Color.Inherit" Class="mt-4">
             <AuthorizeView Roles="Admin">
                 <MudNavLink Href="/admin"
                             Icon="@Icons.Material.Filled.AdminPanelSettings"
-                            Match="NavLinkMatch.Prefix"
+                            Match="NavLinkMatch.All"
                             IconColor="Color.Inherit">
                     Admin Dashboard
                 </MudNavLink>
                 <MudNavLink Href="/admin/users"
                             Icon="@Icons.Material.Filled.People"
+                            Match="NavLinkMatch.All"
                             IconColor="Color.Inherit">
                     Staff Management
+                </MudNavLink>
+                <MudNavLink Href="/admin/menu" 
+                            Icon="@Icons.Material.Filled.RestaurantMenu" 
+                            IconColor="Color.Inherit"
+                            Match="NavLinkMatch.All">
+                    Menu Management
                 </MudNavLink>
             </AuthorizeView>
 
