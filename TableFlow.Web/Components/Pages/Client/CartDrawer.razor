@@ -1,0 +1,226 @@
+﻿@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+@using MudBlazor.Services
+@inject CartService CartService
+@inject ISnackbar Snackbar
+@inject IBrowserViewportService BrowserViewportService
+@implements IBrowserViewportObserver
+@implements IAsyncDisposable
+
+<MudDrawer Open="Open"
+           OpenChanged="OnOpenChanged"
+           Anchor="@_anchor"
+           Variant="DrawerVariant.Temporary"
+           Width="380px"
+           Height="@_drawerHeight"
+           Elevation="4">
+
+    <div style="display:flex; flex-direction:column; height:100%;">
+
+        @* Header *@
+        <div style="padding:16px; display:flex; align-items:center; justify-content:space-between; border-bottom: 1px solid var(--mud-palette-divider);">
+            <MudStack Row="true" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Filled.ShoppingCart"/>
+                <MudText Typo="Typo.h4" Style="font-weight:700;">
+                    Your Cart (@CartService.TotalCount)
+                </MudText>
+            </MudStack>
+            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                           OnClick="CloseDrawer" />
+        </div>
+
+        @* Cart Items *@
+        <div style="flex:1; overflow-y:auto; padding:16px;">
+            @if (!CartService.Items.Any())
+            {
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:200px; gap:12px; opacity:0.5;">
+                    <MudIcon Icon="@Icons.Material.Filled.ShoppingCartCheckout"
+                             Style="font-size:4rem;" />
+                    <MudText Typo="Typo.body1">Your cart is empty</MudText>
+                </div>
+            }
+            else
+            {
+                @foreach (var item in CartService.Items)
+                {
+                    <MudPaper Elevation="1" Class="pa-3 mb-3" Style="border-radius:10px;">
+                        <div style="display:flex; gap:12px; align-items:flex-start;">
+                            <div style="flex:1;">
+                                <MudText Typo="Typo.body1" Style="font-weight:600;">
+                                    @item.ItemName
+                                </MudText>
+                                @if (!string.IsNullOrEmpty(item.VarientName))
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @item.VarientName
+                                    </MudText>
+                                }
+                                @if (!string.IsNullOrEmpty(item.Note))
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        Note: @item.Note
+                                    </MudText>
+                                }
+                                <MudText Typo="Typo.body2" Color="Color.Primary"
+                                         Style="font-weight:600;" Class="mt-1">
+                                    $@item.UnitPrice.ToString("0.00") each
+                                </MudText>
+                            </div>
+                            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               OnClick="@(() => CartService.RemoveItem(item.Key))" />
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                                                   Variant="Variant.Outlined"
+                                                   Color="Color.Primary"
+                                                   Size="Size.Small"
+                                                   Disabled="@(item.Quantity <= 1)"
+                                                   OnClick="@(() => CartService.UpdateQuantity(item.Key, item.Quantity - 1))" />
+                                    <MudText Typo="Typo.body1" Style="font-weight:700; min-width:20px; text-align:center;">
+                                        @item.Quantity
+                                    </MudText>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                                   Variant="Variant.Outlined"
+                                                   Color="Color.Primary"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => CartService.UpdateQuantity(item.Key, item.Quantity + 1))" />
+                                </div>
+                                <MudText Typo="Typo.body2" Style="font-weight:700;">
+                                    $@item.TotalPrice.ToString("0.00")
+                                </MudText>
+                            </div>
+                        </div>
+                    </MudPaper>
+                }
+            }
+        </div>
+
+        @* Footer *@
+        @if (CartService.Items.Any())
+        {
+            <div style="padding:16px; border-top: 1px solid var(--mud-palette-divider);">
+                <div style="display:flex; justify-content:space-between; align-items:center;" class="mb-3">
+                    <MudText Typo="Typo.h6">Total</MudText>
+                    <MudText Typo="Typo.h6" Color="Color.Primary" Style="font-weight:700;">
+                        $@CartService.TotalAmount.ToString("0.00")
+                    </MudText>
+                </div>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.CheckCircle"
+                           Disabled="_placing"
+                           OnClick="PlaceOrderAsync">
+                    @if (_placing)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Place Order
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Error"
+                           FullWidth="true"
+                           Class="mt-1"
+                           OnClick="CartService.Clear">
+                    Clear Cart
+                </MudButton>
+            </div>
+        }
+
+    </div>
+</MudDrawer>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public int SessionId { get; set; }
+    [Parameter] public EventCallback OnOrderPlaced { get; set; }
+
+    // IBrowserViewportObserver required properties
+    Guid IBrowserViewportObserver.Id { get; } = Guid.NewGuid();
+    ResizeOptions IBrowserViewportObserver.ResizeOptions { get; } = new()
+    {
+        ReportRate = 250,
+        NotifyOnBreakpointOnly = true
+    };
+
+    private bool _placing = false;
+    private bool _disposed = false;
+    private Anchor _anchor = Anchor.End;
+    private string _drawerHeight = "100%";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            CartService.OnCartChanged += OnCartUpdated;
+            await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
+        }
+    }
+
+    // IBrowserViewportObserver callback
+    async Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs args)
+    {
+        UpdateAnchor(args.Breakpoint);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateAnchor(Breakpoint breakpoint)
+    {
+        if (breakpoint == Breakpoint.Xs || breakpoint == Breakpoint.Sm)
+        {
+            _anchor = Anchor.Bottom;
+            _drawerHeight = "85vh";
+        }
+        else
+        {
+            _anchor = Anchor.End;
+            _drawerHeight = "100%";
+        }
+    }
+
+    private async Task OnOpenChanged(bool value)
+    {
+        await OpenChanged.InvokeAsync(value);
+    }
+
+    private async Task CloseDrawer()
+    {
+        await OpenChanged.InvokeAsync(false);
+    }
+
+    private void OnCartUpdated()
+    {
+        if (_disposed) return;
+        try
+        {
+            InvokeAsync(StateHasChanged);
+        }
+        catch (ObjectDisposedException)
+        {
+            CartService.OnCartChanged -= OnCartUpdated;
+        }
+    }
+
+    private async Task PlaceOrderAsync()
+    {
+        if (!CartService.Items.Any()) return;
+        _placing = true;
+        await Task.Delay(500);
+        Snackbar.Add("Order placed successfully!", MudBlazor.Severity.Success);
+        CartService.Clear();
+        await CloseDrawer();
+        await OnOrderPlaced.InvokeAsync();
+        _placing = false;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        CartService.OnCartChanged -= OnCartUpdated;
+        await BrowserViewportService.UnsubscribeAsync(this);
+    }
+}

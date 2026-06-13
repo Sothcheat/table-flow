@@ -30,7 +30,7 @@ public class MenuApiService
 
     public async Task<List<CategoryModel>> GetCategoriesAsync()
     {
-        await AttachTokenAsync();
+        //await AttachTokenAsync();
         return await _http.GetFromJsonAsync<List<CategoryModel>>("/api/menu/categories")
                ?? new List<CategoryModel>();
     }
@@ -62,7 +62,7 @@ public class MenuApiService
 
     public async Task<List<MenuItemModel>> GetMenuItemsAsync()
     {
-        await AttachTokenAsync();
+        //await AttachTokenAsync();
         return await _http.GetFromJsonAsync<List<MenuItemModel>>("/api/menu/items")
                ?? new List<MenuItemModel>();
     }
@@ -97,11 +97,16 @@ public class MenuApiService
         return res.IsSuccessStatusCode;
     }
 
+    public async Task<MenuItemModel?> GetMenuItemByIdAsync(int id)
+    {
+        return await _http.GetFromJsonAsync<MenuItemModel>($"/api/menu/items/{id}");
+    }
+
     // ── VARIANTS ─────────────────────────────────────────────────────
 
     public async Task<List<VarientModel>> GetVarientsAsync(int menuItemId)
     {
-        await AttachTokenAsync();
+        //await AttachTokenAsync();
         return await _http.GetFromJsonAsync<List<VarientModel>>($"/api/menu/items/{menuItemId}/varients")
                ?? new List<VarientModel>();
     }

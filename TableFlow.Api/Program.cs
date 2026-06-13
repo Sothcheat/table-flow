@@ -49,6 +49,8 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("CashierOnly", policy => policy.RequireRole("Cashier"));
+    options.AddPolicy("KitchenOnly", policy => policy.RequireRole("Kitchen"));
 });
 
 builder.Services.AddCors(options =>
@@ -81,6 +83,9 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapMenuEndpoints();
+app.MapTableEndpoints();
+app.MapSessionEndpoints();
+app.MapOrderEndpoints();
 
 //using (var scope = app.Services.CreateScope())
 //{

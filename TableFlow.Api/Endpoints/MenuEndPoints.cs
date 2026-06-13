@@ -28,7 +28,7 @@ public static class MenuEndpoints
                     c.MenuItems.Count))
                 .ToListAsync();
             return Results.Ok(categories);
-        });
+        }).AllowAnonymous();
 
         menu.MapGet("/categories/{id:int}", async (int id, [FromServices] IDbContextFactory<AppDbContext> factory) =>
         {
@@ -137,7 +137,7 @@ public static class MenuEndpoints
             )).ToList();
 
             return Results.Ok(response);
-        });
+        }).AllowAnonymous();
 
         menu.MapGet("/items/by-category/{categoryId:int}", async (int categoryId, [FromServices] IDbContextFactory<AppDbContext> factory) =>
         {
@@ -159,7 +159,7 @@ public static class MenuEndpoints
                     )).ToList();
 
             return Results.Ok(response);
-        });
+        }).AllowAnonymous();
 
         menu.MapGet("/items/{id:int}", async (int id, [FromServices] IDbContextFactory<AppDbContext> factory) =>
         {
@@ -176,7 +176,7 @@ public static class MenuEndpoints
                 i.CategoryId, i.Category.CategoryName,
                 i.MenuItemVarients.Select(v => new MenuItemVarientResponse(v.Id, v.MenuItemId, v.VarientName, v.Price, v.IsAvailable)).ToList()
                 ));
-        });
+        }).AllowAnonymous();
 
         menu.MapPost("/items", async (CreateMenuItemRequest req, [FromServices] IDbContextFactory<AppDbContext> factory) =>
         {

@@ -89,7 +89,6 @@
                             <MudTextField @bind-Value="_newVarient.VarientName"
                                           Label="Variant Name"
                                           Variant="Variant.Outlined"
-                                          Dense="true"
                                           Error="@(_errors.ContainsKey("VarientName"))"
                                           ErrorText="@(_errors.GetValueOrDefault("VarientName"))" />
                         </MudItem>
@@ -97,7 +96,6 @@
                             <MudNumericField @bind-Value="_newVarient.Price"
                                              Label="Price ($)"
                                              Variant="Variant.Outlined"
-                                             Dense="true"
                                              Min="0m"
                                              Format="0.00" />
                         </MudItem>
@@ -138,13 +136,11 @@
                                     <MudTd>
                                         <MudTextField @bind-Value="_editForm.VarientName"
                                                       Variant="Variant.Outlined"
-                                                      Dense="true"
                                                       Margin="Margin.Dense" />
                                     </MudTd>
                                     <MudTd>
                                         <MudNumericField @bind-Value="_editForm.Price"
                                                          Variant="Variant.Outlined"
-                                                         Dense="true"
                                                          Margin="Margin.Dense"
                                                          Min="0m"
                                                          Format="0.00" />

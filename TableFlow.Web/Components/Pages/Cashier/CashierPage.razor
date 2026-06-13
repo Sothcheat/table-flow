@@ -1,9 +1,110 @@
 ﻿@page "/cashier"
+@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+@using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Cashier")]
+@inject TableApiService TableApiService
+@inject ISnackbar Snackbar
 
-<PageTitle>Cashier — TableFlow</PageTitle>
+<MudText Typo="Typo.h5" Class="mb-4">Cashier Dashboard</MudText>
 
-<MudText Typo="Typo.h4" Class="mb-2">Cashier</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary">
-    Manage table sessions, orders, and payments here.
-</MudText>
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-4" />
+}
+else
+{
+    @* Stats Row *@
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center">
+                <MudText Typo="Typo.h3" Style="font-weight:700;">@_tables.Count</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Total Tables</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center">
+                <MudText Typo="Typo.h3" Style="font-weight:700; color: var(--mud-palette-success);">
+                    @_tables.Count(t => t.Status == "Available")
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Available</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center">
+                <MudText Typo="Typo.h3" Style="font-weight:700; color: var(--mud-palette-error);">
+                    @_tables.Count(t => t.Status == "Occupied")
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Occupied</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* Table Grid *@
+    <MudText Typo="Typo.h6" Class="mb-3">Tables</MudText>
+    <MudGrid>
+        @foreach (var table in _tables)
+        {
+            <MudItem xs="6" sm="4" md="3">
+                <MudPaper Elevation="3"
+                          Class="pa-4 d-flex flex-column align-center justify-center"
+                          Style="@GetCardStyle(table)"
+                          @onclick="@(() => ToggleStatus(table))">
+                    <MudIcon Icon="@Icons.Material.Filled.TableRestaurant"
+                             Style="font-size:2rem; color:white;"
+                             Class="mb-2" />
+                    <MudText Typo="Typo.h6" Style="color:white; font-weight:600;">
+                        Table @table.TableNumber
+                    </MudText>
+                    <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,0.85);">
+                        @table.Status
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private List<TableModel> _tables = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTablesAsync();
+    }
+
+    private async Task LoadTablesAsync()
+    {
+        _loading = true;
+        _tables = await TableApiService.GetTablesAsync();
+        _loading = false;
+    }
+
+    private async Task ToggleStatus(TableModel table)
+    {
+        var newStatus = table.Status == "Available" ? "Occupied" : "Available";
+        var (success, error) = await TableApiService.UpdateTableStatusAsync(table.Id, newStatus);
+
+        if (success)
+        {
+            _tables = _tables.Select(t =>
+                t.Id == table.Id ? t with { Status = newStatus } : t
+            ).ToList();
+            Snackbar.Add($"Table {table.TableNumber} marked {newStatus}.", MudBlazor.Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(error, MudBlazor.Severity.Error);
+        }
+    }
+
+    private string GetCardStyle(TableModel table)
+    {
+        var bg = table.Status == "Available"
+            ? "var(--mud-palette-success)"
+            : "var(--mud-palette-error)";
+
+        return $"background-color:{bg}; cursor:pointer; min-height:120px; transition: background-color 0.3s;";
+    }
+}

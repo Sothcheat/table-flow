@@ -1,0 +1,213 @@
+﻿@page "/menu/item/{Id:int}"
+@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+@inject CartService CartService
+@inject MenuApiService MenuApiService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_item?.ItemName ?? "Loading...") — TableFlow</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="menu-container pa-4">
+
+    @* Back Button *@
+    <MudButton StartIcon="@Icons.Material.Filled.ArrowBack"
+               Variant="Variant.Text"
+               Color="Color.Primary"
+               Class="mb-4"
+               OnClick="@(() => Navigation.NavigateTo("/menu"))">
+        Back to Menu
+    </MudButton>
+
+    @if (_loading)
+    {
+        @* Loading Skeleton *@
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Style="width:100%; aspect-ratio:1.333;" Class="mb-4" />
+        <MudSkeleton Width="60%" Height="32px" Class="mb-2" />
+        <MudSkeleton Width="30%" Height="24px" Class="mb-4" />
+        <MudSkeleton Width="100%" Height="48px" Class="mb-2" />
+        <MudSkeleton Width="100%" Height="48px" Class="mb-2" />
+    }
+    else if (_item is null)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Error">Item not found.</MudAlert>
+    }
+    else
+    {
+        @* Hero Image *@
+        @if (!string.IsNullOrEmpty(_item.ImageUrl))
+        {
+            @if (!_imageLoaded)
+            {
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle"
+                             Style="width:100%; aspect-ratio:1.333;"
+                             Class="mb-4" />
+            }
+            <img src="@_item.ImageUrl"
+                 alt="@_item.ItemName"
+                 style="width:100%; aspect-ratio:1.333; object-fit:cover; border-radius:12px;"
+                 hidden="@(!_imageLoaded)"
+                 @onload="@(() => { _imageLoaded = true; StateHasChanged(); })"
+                 @onerror="@(() => { _imageLoaded = true; StateHasChanged(); })" />
+        }
+        else
+        {
+            <div style="width:100%; aspect-ratio:1.333; background-color:var(--mud-palette-background-grey); display:flex; align-items:center; justify-content:center; border-radius:12px;" class="mb-4">
+                <MudIcon Icon="@Icons.Material.Filled.Restaurant"
+                         Style="font-size:4rem; color:var(--mud-palette-text-disabled);" />
+            </div>
+        }
+
+        @* Item Info *@
+        <MudText Typo="Typo.h5" Style="font-weight:700;" Class="mt-4 mb-1">@_item.ItemName</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-1">@_item.CategoryName</MudText>
+
+        @if (!_item.IsAvailable)
+        {
+            <MudChip T="string" Color="Color.Error" Size="Size.Small" Class="mb-4">
+                Currently Unavailable
+            </MudChip>
+        }
+
+        @* Variant Picker *@
+        <MudText Typo="Typo.h6" Style="font-weight:600;" Class="mt-4 mb-2">Choose a size</MudText>
+
+        @foreach (var variant in _item.Varients.Where(v => v.IsAvailable).OrderBy(v => v.Price))
+        {
+            var isSelected = _selectedVariant?.Id == variant.Id;
+            <MudPaper Elevation="@(isSelected ? 4 : 1)"
+                      Class="pa-3 mb-2"
+                      Style="@($"cursor:pointer; border-radius:10px; border: 2px solid {(isSelected ? "var(--mud-palette-primary)" : "transparent")};")"
+                      @onclick="@(() => SelectVariant(variant))">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <MudText Typo="Typo.body1" Style="font-weight:600;">@variant.VarientName</MudText>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <MudText Typo="Typo.body1" Color="Color.Primary" Style="font-weight:700;">
+                            $@variant.Price.ToString("0.00")
+                        </MudText>
+                        @if (isSelected)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Primary" />
+                        }
+                    </div>
+                </div>
+            </MudPaper>
+        }
+
+        @if (_item.Varients.Any(v => !v.IsAvailable))
+        {
+            @foreach (var variant in _item.Varients.Where(v => !v.IsAvailable).OrderBy(v => v.Price))
+            {
+                <MudPaper Elevation="0"
+                          Class="pa-3 mb-2"
+                          Style="cursor:not-allowed; border-radius:10px; opacity:0.5;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <MudText Typo="Typo.body1">@variant.VarientName</MudText>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <MudText Typo="Typo.body1">$@variant.Price.ToString("0.00")</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error">Unavailable</MudChip>
+                        </div>
+                    </div>
+                </MudPaper>
+            }
+        }
+
+        @* Add to Cart Button *@
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   FullWidth="true"
+                   Size="Size.Large"
+                   StartIcon="@Icons.Material.Filled.AddShoppingCart"
+                   Disabled="@(_selectedVariant == null || !_item.IsAvailable)"
+                   Class="mt-4"
+                   OnClick="AddToCart">
+            @(_selectedVariant == null ? "Select a size first" : "Add to Cart")
+        </MudButton>
+    }
+    @* Floating Cart Button *@
+    @if (!_cartOpen)
+    {
+        <div style="position:fixed; bottom:24px; right:24px; z-index:9999;">
+            <div style="position:relative; display:inline-flex;">
+                <MudFab Color="Color.Primary"
+                        StartIcon="@Icons.Material.Filled.ShoppingCart"
+                        OnClick="OpenCart" />
+                @if (CartService.TotalCount > 0)
+                {
+                    <div style="position:absolute; top:-8px; right:-8px;
+                        background:var(--mud-palette-error);
+                        color:white; border-radius:50%;
+                        width:22px; height:22px;
+                        display:flex; align-items:center; justify-content:center;
+                        font-size:11px; font-weight:700; pointer-events:none;">
+                        @CartService.TotalCount
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    @* Cart Drawer *@
+    <CartDrawer @ref="_cartDrawer"
+                @bind-Open="_cartOpen"
+                SessionId="1"
+                OnOrderPlaced="OnOrderPlaced" />
+
+</MudContainer>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private MenuItemModel? _item;
+    private bool _loading = true;
+    private bool _imageLoaded = false;
+    private CartDrawer _cartDrawer = null!;
+    private int _quantity = 1;
+    private VarientModel? _selectedVariant = null;
+    private bool _cartOpen = false;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        _item = await MenuApiService.GetMenuItemByIdAsync(Id);
+        _loading = false;
+    }
+
+    private void SelectVariant(VarientModel variant)
+    {
+        _selectedVariant = variant;
+    }
+
+    private void OpenCart()
+    {
+        _cartOpen = true;
+        StateHasChanged();
+    }
+
+    private void AddToCart()
+    {
+        if (_item is null || _selectedVariant is null) return;
+
+        CartService.AddItem(new CartItem
+        {
+            MenuItemId = _item.Id,
+            ItemName = _item.ItemName,
+            ImageUrl = _item.ImageUrl,
+            VarientId = _selectedVariant.Id,
+            VarientName = _selectedVariant.VarientName,
+            UnitPrice = _selectedVariant.Price,
+            Quantity = _quantity
+        });
+
+        Snackbar.Add($"{_quantity}x {_item.ItemName} ({_selectedVariant.VarientName}) added to cart.", MudBlazor.Severity.Success);
+        _quantity = 1;
+        _selectedVariant = null;
+    }
+
+    private void OnOrderPlaced()
+    {
+        Navigation.NavigateTo("/menu");
+    }
+}

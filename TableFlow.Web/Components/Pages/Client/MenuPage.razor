@@ -1,0 +1,273 @@
+﻿@page "/menu"
+@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+@inject CartService CartService
+@inject MenuApiService MenuApiService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Menu — TableFlow</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="menu-container pa-4">
+
+    @* Header *@
+    <MudText Typo="Typo.h4" Style="font-weight:700;" Class="mb-1">Our Menu</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        Browse our categories and find something you love
+    </MudText>
+
+    @* Search Bar *@
+    <MudTextField @bind-Value="_searchText"
+                  Placeholder="Search items..."
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Variant="Variant.Outlined"
+                  Clearable="true"
+                  Immediate="true"
+                  Class="mb-4"
+                  OnClearButtonClick="ClearSearch" />
+
+    @* Category Chips *@
+    @if (_categories.Any())
+    {
+        <div style="overflow-x:auto; white-space:nowrap; padding-bottom:8px;" class="mb-4">
+            <MudChip T="string"
+                     Color="@(_selectedCategoryId == null ? Color.Primary : Color.Default)"
+                     Variant="@(_selectedCategoryId == null ? Variant.Filled : Variant.Outlined)"
+                     OnClick="@(() => SelectCategory(null))"
+                     Style="margin-right:8px;">
+                All
+            </MudChip>
+            @foreach (var category in _categories)
+            {
+                <MudChip T="string"
+                         Color="@(_selectedCategoryId == category.Id ? Color.Primary : Color.Default)"
+                         Variant="@(_selectedCategoryId == category.Id ? Variant.Filled : Variant.Outlined)"
+                         OnClick="@(() => SelectCategory(category.Id))"
+                         Style="margin-right:8px;">
+                    @category.CategoryName
+                </MudChip>
+            }
+        </div>
+    }
+
+    @* Loading Skeletons *@
+    @if (_loading)
+    {
+        <MudGrid Spacing="2">
+            @for (int i = 0; i < 8; i++)
+            {
+                <MudItem xs="6" sm="6" md="4" lg="3">
+                    <MudCard>
+                        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Style="aspect-ratio:4/3; width:100%;" />
+                        <MudCardContent Class="pa-2">
+                            <MudSkeleton Width="70%" />
+                            <MudSkeleton Width="40%" />
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+    else if (!FilteredItems.Any())
+    {
+        <MudAlert Severity="MudBlazor.Severity.Info" Class="mt-4">
+            No items found. Try a different search or category.
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid Spacing="4">
+            @foreach (var item in FilteredItems)
+            {
+                <MudItem xs="6" sm="6" md="4" lg="3">
+                    <MudCard Style="height:100%; display:flex; flex-direction:column; border-radius:12px; overflow:hidden;">
+
+                        @* Image *@
+                        @if (!string.IsNullOrEmpty(item.ImageUrl))
+                        {
+                            @if (!_imageLoaded.ContainsKey(item.Id) || !_imageLoaded[item.Id])
+                            {
+                                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Style="aspect-ratio:4/3; width:100%;" />
+                            }
+                            <img src="@item.ImageUrl"
+                                 alt="@item.ItemName"
+                                 style="width:100%; aspect-ratio:1.333; object-fit:cover;"
+                                 hidden="@(!_imageLoaded.ContainsKey(item.Id) || !_imageLoaded[item.Id])"
+                                 @onload="@(() => OnImageLoaded(item.Id))"
+                                 @onerror="@(() => OnImageError(item.Id))" />
+                        }
+                        else
+                        {
+                            <div style="width:100%; aspect-ratio:4/3; background-color:var(--mud-palette-background-grey); display:flex; align-items:center; justify-content:center;">
+                                <MudIcon Icon="@Icons.Material.Filled.Restaurant"
+                                         Style="font-size:2.5rem; color:var(--mud-palette-text-disabled);" />
+                            </div>
+                        }
+
+                        @* Card Content *@
+                        <MudCardContent Class="pa-2" Style="flex:1;">
+                            <MudText Typo="Typo.body1" Style="font-weight:600; line-height:1.2;" Class="mb-1">
+                                @item.ItemName
+                            </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-1">
+                                @item.CategoryName
+                            </MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Primary" Style="font-weight:700;">
+                                $@item.BasePrice.ToString("0.00")
+                            </MudText>
+                        </MudCardContent>
+
+                        @* Actions *@
+                        <MudCardActions Class="pa-2 pt-0">
+                            @if (!item.IsAvailable)
+                            {
+                                <MudChip T="string" Color="Color.Error" Size="Size.Small" Disabled="true" Style="width:100%;">
+                                    Unavailable
+                                </MudChip>
+                            }
+                            else if (item.HasVarient)
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           FullWidth="true"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Tune"
+                                           Style="white-space:nowrap;"
+                                           OnClick="@(() => Navigation.NavigateTo($"/menu/item/{item.Id}"))">
+                                    View Options
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           FullWidth="true"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.AddShoppingCart"
+                                           Style="white-space:nowrap;"
+                                           OnClick="@(() => AddToCart(item))">
+                                    Add to Cart
+                                </MudButton>
+                            }
+                        </MudCardActions>
+
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+    @* Floating Cart Button *@
+    @if (!_cartOpen)
+    {
+        <div style="position:fixed; bottom:24px; right:24px; z-index:9999;">
+            <div style="position:relative; display:inline-flex;">
+                <MudFab Color="Color.Primary"
+                        StartIcon="@Icons.Material.Filled.ShoppingCart"
+                        OnClick="OpenCart" />
+                @if (CartService.TotalCount > 0)
+                {
+                    <div style="position:absolute; top:-8px; right:-8px;
+                        background:var(--mud-palette-error);
+                        color:white; border-radius:50%;
+                        width:22px; height:22px;
+                        display:flex; align-items:center; justify-content:center;
+                        font-size:11px; font-weight:700; pointer-events:none;">
+                        @CartService.TotalCount
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    @* Cart Drawer *@
+    <CartDrawer @ref="_cartDrawer"
+                @bind-Open="_cartOpen"
+                SessionId="1"
+                OnOrderPlaced="OnOrderPlaced" />
+
+</MudContainer>
+
+@code {
+    private List<CategoryModel> _categories = [];
+    private List<MenuItemModel> _menuItems = [];
+    private Dictionary<int, bool> _imageLoaded = new();
+    private bool _loading = true;
+    private int? _selectedCategoryId = null;
+    private string _searchText = string.Empty;
+    private CartDrawer _cartDrawer = null!;
+    private bool _cartOpen = false;
+
+    private IEnumerable<MenuItemModel> FilteredItems
+    {
+        get
+        {
+            var items = _menuItems.AsEnumerable();
+
+            if (_selectedCategoryId.HasValue)
+                items = items.Where(i => i.CategoryId == _selectedCategoryId.Value);
+
+            if (!string.IsNullOrWhiteSpace(_searchText))
+                items = items.Where(i =>
+                    i.ItemName.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                    i.CategoryName.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+
+            return items;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        _categories = await MenuApiService.GetCategoriesAsync();
+        _menuItems = await MenuApiService.GetMenuItemsAsync();
+        _loading = false;
+    }
+
+    private void SelectCategory(int? categoryId)
+    {
+        _selectedCategoryId = categoryId;
+        _searchText = string.Empty;
+    }
+
+    private void ClearSearch()
+    {
+        _searchText = string.Empty;
+        _selectedCategoryId = null;
+    }
+
+    private void OnImageLoaded(int itemId)
+    {
+        _imageLoaded[itemId] = true;
+        StateHasChanged();
+    }
+
+    private void OnImageError(int itemId)
+    {
+        _imageLoaded[itemId] = false;
+        StateHasChanged();
+    }
+
+    private void OpenCart()
+    {
+        _cartOpen = true;
+        StateHasChanged();
+    }
+
+    private void AddToCart(MenuItemModel item)
+    {
+        CartService.AddItem(new CartItem
+        {
+            MenuItemId = item.Id,
+            ItemName = item.ItemName,
+            ImageUrl = item.ImageUrl,
+            UnitPrice = item.BasePrice,
+            Quantity = 1
+        });
+        Snackbar.Add($"{item.ItemName} added to cart.", MudBlazor.Severity.Success);
+    }
+
+    private void OnOrderPlaced()
+    {
+        // placeholder — will refresh order history later
+    }
+}

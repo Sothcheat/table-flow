@@ -26,14 +26,13 @@
         <MudText Typo="Typo.body2" Class="mr-3">@_userName</MudText>
         <MudIconButton Icon="@Icons.Material.Filled.Logout"
                        Color="Color.Inherit"
-                       OnClick="LogoutAsync"
-                       Title="Logout" />
+                       OnClick="LogoutAsync" />
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen"
                Elevation="1"
                Variant="@DrawerVariant.Responsive"
-               Color="Color.Primary"
+               Class="tableflow-drawer"
                ClipMode="DrawerClipMode.Always" Overlay="false">
 
         @* Drawer header — only on small screens *@
@@ -48,43 +47,38 @@
             </MudDrawerHeader>
         </MudHidden>
 
-        <MudNavMenu Color="Color.Inherit" Class="mt-4">
+        <MudNavMenu Class="mt-4">
             <AuthorizeView Roles="Admin">
                 <MudNavLink Href="/admin"
                             Icon="@Icons.Material.Filled.AdminPanelSettings"
-                            Match="NavLinkMatch.All"
-                            IconColor="Color.Inherit">
+                            Match="NavLinkMatch.All">
                     Admin Dashboard
                 </MudNavLink>
                 <MudNavLink Href="/admin/users"
                             Icon="@Icons.Material.Filled.People"
-                            Match="NavLinkMatch.All"
-                            IconColor="Color.Inherit">
+                            Match="NavLinkMatch.Prefix">
                     Staff Management
                 </MudNavLink>
-                <MudNavLink Href="/admin/menu" 
-                            Icon="@Icons.Material.Filled.RestaurantMenu" 
-                            IconColor="Color.Inherit"
-                            Match="NavLinkMatch.All">
+                <MudNavLink Href="/admin/menu"
+                            Icon="@Icons.Material.Filled.RestaurantMenu"
+                            Match="NavLinkMatch.Prefix">
                     Menu Management
+                </MudNavLink>
+                <MudNavLink Href="/admin/tables" Icon="@Icons.Material.Filled.TableRestaurant" Match="NavLinkMatch.Prefix">
+                    Tables
                 </MudNavLink>
             </AuthorizeView>
 
             <AuthorizeView Roles="Cashier">
                 <MudNavLink Href="/cashier"
                             Icon="@Icons.Material.Filled.PointOfSale"
-                            Match="NavLinkMatch.Prefix"
-                            IconColor="Color.Inherit">
-                    Cashier
+                            Match="NavLinkMatch.All">
+                    Cashier Dashboard
                 </MudNavLink>
-            </AuthorizeView>
-
-            <AuthorizeView Roles="Kitchen">
-                <MudNavLink Href="/kitchen"
-                            Icon="@Icons.Material.Filled.Kitchen"
-                            Match="NavLinkMatch.Prefix"
-                            IconColor="Color.Inherit">
-                    Kitchen
+                <MudNavLink Href="/admin/tables"
+                            Icon="@Icons.Material.Filled.TableRestaurant"
+                            Match="NavLinkMatch.Prefix">
+                    Tables
                 </MudNavLink>
             </AuthorizeView>
         </MudNavMenu>

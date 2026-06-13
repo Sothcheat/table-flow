@@ -3,9 +3,12 @@
 
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h3" Style="font-weight:bold" Class="mt-2">
-            @(IsEditMode ? "Edit Staff" : "Add Staff")
-        </MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2">
+            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" />
+            <MudText Typo="Typo.h3" Style="font-weight:bold">
+                @(IsEditMode ? "Edit Staff" : "Add Staff")
+            </MudText>
+        </MudStack>
     </TitleContent>
 
     <DialogContent>

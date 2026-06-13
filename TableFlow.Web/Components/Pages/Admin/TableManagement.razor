@@ -1,0 +1,189 @@
+﻿@page "/admin/tables"
+@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject TableApiService TableApiService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Table Management - TableFlow</PageTitle>
+<MudButton StartIcon="@Icons.Material.Filled.ArrowBack"
+           Variant="Variant.Text"
+           Color="Color.Primary"
+           Class="mb-4"
+           OnClick="GoBack">
+    Back to Dashboard
+</MudButton>
+<MudText Typo="Typo.h2" Style="font-weight:bold" Class="mb-6">Table Management</MudText>
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-4" />
+}
+else
+{
+    @if (IsAdmin)
+    {
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddDialog"
+                   Class="mb-4">
+            Add Table
+        </MudButton>
+    }
+
+    <MudTable Items="_tables" Hover="true" Striped="true" Bordered="true">
+        <HeaderContent>
+            <MudTh>Table Number</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>Table @context.TableNumber</MudTd>
+            <MudTd>
+                <MudChip T="string"
+                         Color="@(context.Status == "Available" ? Color.Success : Color.Error)"
+                         Size="Size.Small">
+                    @context.Status
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                @if (IsAdmin)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   OnClick="@(() => OpenEditDialog(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@(() => DeleteTable(context))" />
+                }
+                @if (IsCashier)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               Size="Size.Small"
+                               Color="@(context.Status == "Available" ? Color.Error : Color.Success)"
+                               OnClick="@(() => ToggleStatus(context))">
+                        @(context.Status == "Available" ? "Mark Occupied" : "Mark Available")
+                    </MudButton>
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<TableModel> _tables = [];
+    private bool _loading = true;
+    private bool IsAdmin;
+    private bool IsCashier;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        IsAdmin = user.IsInRole("Admin");
+        IsCashier = user.IsInRole("Cashier");
+
+        await LoadTablesAsync();
+    }
+
+    private void GoBack()
+    {
+        if (IsAdmin)
+            Navigation.NavigateTo("/admin");
+        else if (IsCashier)
+            Navigation.NavigateTo("/cashier");
+    }
+
+    private async Task LoadTablesAsync()
+    {
+        _loading = true;
+        _tables = await TableApiService.GetTablesAsync();
+        _loading = false;
+    }
+
+    private async Task OpenAddDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(TableFormDialog.OnCreate), async (int tableNumber) =>
+                await TableApiService.CreateTableAsync(tableNumber) }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<TableFormDialog>("", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            await LoadTablesAsync();
+            Snackbar.Add("Table added successfully.", MudBlazor.Severity.Success);
+        }
+    }
+
+    private async Task OpenEditDialog(TableModel table)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(TableFormDialog.ExistingTable), table },
+            { nameof(TableFormDialog.OnUpdate), async (int id, int tableNumber) =>
+                await TableApiService.UpdateTableAsync(id, tableNumber) }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<TableFormDialog>("", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            await LoadTablesAsync();
+            Snackbar.Add("Table updated successfully.", MudBlazor.Severity.Success);
+        }
+    }
+
+    private async Task DeleteTable(TableModel table)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Delete Table",
+            $"Are you sure you want to delete Table {table.TableNumber}?",
+            yesText: "Delete",
+            cancelText: "Cancel"
+        );
+
+        if (confirmed is not true) return;
+
+        var (success, error) = await TableApiService.DeleteTableAsync(table.Id);
+        if (success)
+        {
+            _tables = _tables.Where(t => t.Id != table.Id).ToList();
+            Snackbar.Add("Table deleted.", MudBlazor.Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(error, MudBlazor.Severity.Error);
+        }
+    }
+
+    private async Task ToggleStatus(TableModel table)
+    {
+        var newStatus = table.Status == "Available" ? "Occupied" : "Available";
+        var (success, error) = await TableApiService.UpdateTableStatusAsync(table.Id, newStatus);
+
+        if (success)
+        {
+            _tables = _tables.Select(t =>
+                t.Id == table.Id ? t with { Status = newStatus } : t
+            ).ToList();
+            Snackbar.Add($"Table {table.TableNumber} marked {newStatus}.", MudBlazor.Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(error, MudBlazor.Severity.Error);
+        }
+    }
+}
