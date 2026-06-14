@@ -1,0 +1,87 @@
+﻿@using TableFlow.Web.Models
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Filled.TableRestaurant" />
+            <MudText Typo="Typo.h3" Style="font-weight:bold">
+                @(IsEditMode ? "Edit Table" : "Add Table")
+            </MudText>
+        </MudStack>
+    </TitleContent>
+
+    <DialogContent>
+        <MudNumericField @bind-Value="_tableNumber"
+                         Label="Table Number"
+                         Min="1"
+                         Variant="Variant.Outlined"
+                         Class="mt-2" />
+
+        @if (_errors.ContainsKey("TableNumber"))
+        {
+            <MudText Color="Color.Error" Typo="Typo.caption">@_errors["TableNumber"]</MudText>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudItem Class="mb-3 mr-4">
+            <MudButton OnClick="Cancel" Variant="Variant.Text" Class="mr-3">Cancel</MudButton>
+            <MudButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving">
+                @if (_saving)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                @(IsEditMode ? "Save" : "Add")
+            </MudButton>
+        </MudItem>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public TableModel? ExistingTable { get; set; }
+    [Parameter] public Func<int, Task<(bool Success, string Error)>> OnCreate { get; set; } = null!;
+    [Parameter] public Func<int, int, Task<(bool Success, string Error)>> OnUpdate { get; set; } = null!;
+
+    private int _tableNumber;
+    private bool _saving;
+    private Dictionary<string, string> _errors = new();
+    private bool IsEditMode => ExistingTable is not null;
+
+    protected override void OnInitialized()
+    {
+        if (IsEditMode)
+            _tableNumber = ExistingTable!.TableNumber;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        _errors.Clear();
+
+        if (_tableNumber < 1)
+        {
+            _errors["TableNumber"] = "Table number must be at least 1.";
+            return;
+        }
+
+        _saving = true;
+
+        var (success, error) = IsEditMode
+            ? await OnUpdate(ExistingTable!.Id, _tableNumber)
+            : await OnCreate(_tableNumber);
+
+        _saving = false;
+
+        if (!success)
+        {
+            _errors["TableNumber"] = error.Contains("already exists")
+                ? $"Table {_tableNumber} already exists."
+                : "Something went wrong.";
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(_tableNumber));
+    }
+}

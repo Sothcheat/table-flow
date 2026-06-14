@@ -28,7 +28,7 @@ public static class MenuEndpoints
                     c.MenuItems.Count))
                 .ToListAsync();
             return Results.Ok(categories);
-        });
+        }).AllowAnonymous();
 
         menu.MapGet("/categories/{id:int}", async (int id, [FromServices] IDbContextFactory<AppDbContext> factory) =>
         {
@@ -137,7 +137,7 @@ public static class MenuEndpoints
             )).ToList();
 
             return Results.Ok(response);
-        });
+        }).AllowAnonymous();
 
         menu.MapGet("/items/by-category/{categoryId:int}", async (int categoryId, [FromServices] IDbContextFactory<AppDbContext> factory) =>
         {
@@ -159,7 +159,7 @@ public static class MenuEndpoints
                     )).ToList();
 
             return Results.Ok(response);
-        });
+        }).AllowAnonymous();
 
         menu.MapGet("/items/{id:int}", async (int id, [FromServices] IDbContextFactory<AppDbContext> factory) =>
         {
@@ -176,7 +176,7 @@ public static class MenuEndpoints
                 i.CategoryId, i.Category.CategoryName,
                 i.MenuItemVarients.Select(v => new MenuItemVarientResponse(v.Id, v.MenuItemId, v.VarientName, v.Price, v.IsAvailable)).ToList()
                 ));
-        });
+        }).AllowAnonymous();
 
         menu.MapPost("/items", async (CreateMenuItemRequest req, [FromServices] IDbContextFactory<AppDbContext> factory) =>
         {
@@ -241,6 +241,20 @@ public static class MenuEndpoints
             return Results.NoContent();
         });
 
+        // PATCH update item availability — Kitchen or Admin
+        menu.MapPatch("/items/{id:int}/availability", async (
+            int id,
+            [FromBody] UpdateItemAvailabilityRequest req,
+            [FromServices] IDbContextFactory<AppDbContext> factory) =>
+        {
+            await using var db = await factory.CreateDbContextAsync();
+            var item = await db.MenuItems.FindAsync(id);
+            if (item is null) return Results.NotFound();
+            item.IsAvailable = req.IsAvailable;
+            await db.SaveChangesAsync();
+            return Results.Ok();
+        }).RequireAuthorization("AdminOrKitchen");
+
         // ── VARIANTS ─────────────────────────────────────────────────
 
         menu.MapGet("/items/{itemId:int}/varients", async (int itemId, [FromServices] IDbContextFactory<AppDbContext> factory) =>
@@ -256,7 +270,7 @@ public static class MenuEndpoints
                     v.Id, v.MenuItemId, v.VarientName, v.Price, v.IsAvailable))
                 .ToListAsync();
             return Results.Ok(varients);
-        });
+        }).AllowAnonymous();
 
         menu.MapPost("/items/{itemId:int}/varients", async (int itemId, CreateMenuItemVarientRequest req, [FromServices] IDbContextFactory<AppDbContext> factory) =>
         {

@@ -45,4 +45,22 @@
         </MudPaper>
     </MudItem>
 
+    <MudItem xs="12" sm="6" md="4">
+        <MudPaper Elevation="2"
+                  Class="pa-6 d-flex flex-column align-center justify-center"
+                  Style="cursor:pointer; min-height:140px;"
+                  @onclick="@(() => Navigation.NavigateTo("/admin/tables"))">
+            <MudIcon Icon="@Icons.Material.Filled.TableRestaurant"
+                     Color="Color.Primary"
+                     Size="Size.Large"
+                     Class="mb-2" />
+            <MudText Typo="Typo.h4" Style="font-weight:600;" Class="mb-1">
+                Table Management
+            </MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                Manage restaurant tables
+            </MudText>
+        </MudPaper>
+    </MudItem>
+
 </MudGrid>

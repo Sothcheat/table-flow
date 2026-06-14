@@ -67,4 +67,6 @@
         decimal Price,
         bool IsAvailable
     );
+
+    public record UpdateItemAvailabilityRequest(bool IsAvailable);
 }

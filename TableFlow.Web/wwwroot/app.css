@@ -36,3 +36,70 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* ── Drawer background ── */
+.tableflow-drawer .mud-drawer-content {
+    background-color: var(--mud-palette-primary) !important;
+}
+
+/* ── Nav link default ── */
+.tableflow-drawer .mud-nav-link {
+    color: rgba(255, 255, 255, 0.85) !important;
+    border-radius: 8px !important;
+    margin: 4px 12px !important;
+    padding: 10px 12px !important;
+}
+
+    /* ── Icon default ── */
+    .tableflow-drawer .mud-nav-link .mud-icon-root {
+        color: rgba(255, 255, 255, 0.85) !important;
+
+    }
+
+    /* ── Hover ── */
+    .tableflow-drawer .mud-nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.15) !important;
+        color: white !important;
+    }
+
+        .tableflow-drawer .mud-nav-link:hover .mud-icon-root {
+            color: white !important;
+        }
+
+    /* ── Active ── */
+    .tableflow-drawer .mud-nav-link.active {
+        background-color: rgba(255, 255, 255, 0.22) !important;
+        color: white !important;
+        font-weight: 600 !important;
+    }
+
+        .tableflow-drawer .mud-nav-link.active .mud-icon-root {
+            color: white !important;
+        }
+
+/* Remove the pseudo-element approach entirely */
+.tableflow-drawer .mud-drawer-content::before {
+    display: none;
+}
+
+/* Simple clean rounded top-right corner */
+.tableflow-drawer .mud-drawer-content {
+    border-top-right-radius: 20px !important;
+    background-color: var(--mud-palette-primary) !important;
+}
+
+.mud-table-cell {
+    font-size: 0.9375rem !important;
+}
+
+.mud-table-head .mud-table-cell {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+}
+
+@media (max-width: 600px) {
+    .menu-container.mud-container {
+        padding-left: 4px !important;
+        padding-right: 4px !important;
+    }
+}

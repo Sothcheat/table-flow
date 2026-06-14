@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.AspNetCore.Identity;
@@ -20,7 +20,7 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddMudServices();
 
-builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+//builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 //builder.Services.AddDbContextFactory<AppDbContext>(options =>
 //    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
@@ -37,6 +37,10 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
 //})
 //    .AddEntityFrameworkStores<AppDbContext>()
 //    .AddDefaultTokenProviders();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNameCaseInsensitive = true;
+});
 
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
 {
@@ -76,6 +80,14 @@ builder.Services.AddSingleton<IValidator<LoginModel>, LoginValidator>();
 builder.Services.AddScoped<UserApiService>();
 
 builder.Services.AddScoped<MenuApiService>();
+
+builder.Services.AddScoped<TableApiService>();
+
+builder.Services.AddScoped<CartService>();
+
+builder.Services.AddScoped<OrderApiService>();
+
+builder.Services.AddScoped<SessionApiService>();
 
 builder.Services.AddScoped<UserFormValidator>();
 

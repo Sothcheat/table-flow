@@ -26,7 +26,7 @@ namespace TableFlow.Api.Data
 
             modelBuilder.Entity<MenuItem>()
                 .Property(m => m.BasePrice)
-                .HasPrecision(10,2);
+                .HasPrecision(10, 2);
 
             modelBuilder.Entity<MenuItemVarient>()
                 .Property(v => v.Price)
@@ -72,6 +72,11 @@ namespace TableFlow.Api.Data
                 .HasForeignKey(oi => oi.VarientId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.TableSession)
+                .WithMany(s => s.Orders)
+                .HasForeignKey(o => o.SessionId);
 
             // indexing for database query
 
