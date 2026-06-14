@@ -85,6 +85,10 @@ builder.Services.AddScoped<TableApiService>();
 
 builder.Services.AddScoped<CartService>();
 
+builder.Services.AddScoped<OrderApiService>();
+
+builder.Services.AddScoped<SessionApiService>();
+
 builder.Services.AddScoped<UserFormValidator>();
 
 var app = builder.Build();

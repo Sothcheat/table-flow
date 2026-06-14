@@ -10,7 +10,8 @@
         DateTime OpenedAt,
         DateTime? ClosedAt,
         string CreatedById,
-        string CreatedByName
+        string CreatedByName,
+        string? QrCodeBase64
     );
 
     public record CreateSessionRequest(

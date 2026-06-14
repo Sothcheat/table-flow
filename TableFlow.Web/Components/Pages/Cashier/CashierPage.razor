@@ -4,7 +4,9 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Cashier")]
 @inject TableApiService TableApiService
+@inject OrderApiService OrderApiService
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <MudText Typo="Typo.h5" Class="mb-4">Cashier Dashboard</MudText>
 
@@ -72,6 +74,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         await LoadTablesAsync();
+
     }
 
     private async Task LoadTablesAsync()
@@ -83,21 +86,52 @@ else
 
     private async Task ToggleStatus(TableModel table)
     {
-        var newStatus = table.Status == "Available" ? "Occupied" : "Available";
-        var (success, error) = await TableApiService.UpdateTableStatusAsync(table.Id, newStatus);
-
-        if (success)
+        if (table.Status == "Available")
         {
-            _tables = _tables.Select(t =>
-                t.Id == table.Id ? t with { Status = newStatus } : t
-            ).ToList();
-            Snackbar.Add($"Table {table.TableNumber} marked {newStatus}.", MudBlazor.Severity.Success);
+            var (sessionSuccess, session, sessionError) = await OrderApiService.OpenSessionAsync(table.Id);
+            if (!sessionSuccess)
+            {
+                Snackbar.Add($"Failed to open session: {sessionError}", MudBlazor.Severity.Error);
+                return;
+            }
+
+            // Reload from API to get accurate state
+            await LoadTablesAsync();
+            Snackbar.Add($"Table {table.TableNumber} session opened.", MudBlazor.Severity.Success);
+
+
+            if (!string.IsNullOrEmpty(session?.QrCodeBase64))
+            {
+                var parameters = new DialogParameters
+            {
+                { nameof(QrCodeDialog.QrCodeBase64), session.QrCodeBase64 },
+                { nameof(QrCodeDialog.TableNumber), table.TableNumber },
+                { nameof(QrCodeDialog.SessionId), session.Id }
+            };
+                var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+                await DialogService.ShowAsync<QrCodeDialog>("", parameters, options);
+            }
         }
         else
         {
-            Snackbar.Add(error, MudBlazor.Severity.Error);
+            var activeSession = await OrderApiService.GetActiveSessionAsync(table.Id);
+            if (activeSession is not null)
+            {
+                var (closeSuccess, _, closeError) = await OrderApiService.CloseSessionAsync(activeSession.Id, "Cash");
+                if (!closeSuccess)
+                {
+                    Snackbar.Add($"Failed to close session: {closeError}", MudBlazor.Severity.Error);
+                    return;
+                }
+            }
+
+            // Reload from API to get accurate state
+            await LoadTablesAsync();
+            Snackbar.Add($"Table {table.TableNumber} marked Available.", MudBlazor.Severity.Success);
         }
     }
+
+
 
     private string GetCardStyle(TableModel table)
     {

@@ -2,6 +2,7 @@
 @using TableFlow.Web.Services
 @using MudBlazor.Services
 @inject CartService CartService
+@inject OrderApiService OrderApiService
 @inject ISnackbar Snackbar
 @inject IBrowserViewportService BrowserViewportService
 @implements IBrowserViewportObserver
@@ -209,11 +210,24 @@
     {
         if (!CartService.Items.Any()) return;
         _placing = true;
-        await Task.Delay(500);
-        Snackbar.Add("Order placed successfully!", MudBlazor.Severity.Success);
-        CartService.Clear();
-        await CloseDrawer();
-        await OnOrderPlaced.InvokeAsync();
+
+        var (success, order, error) = await OrderApiService.PlaceOrderAsync(
+            SessionId,
+            CartService.Items.ToList()
+        );
+
+        if (success)
+        {
+            Snackbar.Add($"Order {order!.OrderNumber} placed successfully!", MudBlazor.Severity.Success);
+            CartService.Clear();
+            await CloseDrawer();
+            await OnOrderPlaced.InvokeAsync();
+        }
+        else
+        {
+            Snackbar.Add($"Failed to place order: {error}", MudBlazor.Severity.Error);
+        }
+
         _placing = false;
     }
 

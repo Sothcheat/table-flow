@@ -1,0 +1,34 @@
+﻿@using TableFlow.Web.Models
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight:700;">
+            <MudIcon Icon="@Icons.Material.Filled.QrCode" Class="mr-2" />
+            Table @TableNumber — Scan to Order
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:16px; padding:16px;">
+            <img src="@($"data:image/png;base64,{QrCodeBase64}")"
+                 alt="QR Code"
+                 style="width:250px; height:250px;" />
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                Session #@SessionId — Ask customer to scan this QR code to view the menu and place orders.
+            </MudText>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="@(() => MudDialog.Close())">
+            Done
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public string QrCodeBase64 { get; set; } = string.Empty;
+    [Parameter] public int TableNumber { get; set; }
+    [Parameter] public int SessionId { get; set; }
+}
