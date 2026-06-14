@@ -102,6 +102,15 @@ public class MenuApiService
         return await _http.GetFromJsonAsync<MenuItemModel>($"/api/menu/items/{id}");
     }
 
+    public async Task<bool> UpdateItemAvailabilityAsync(int id, bool isAvailable)
+    {
+        await AttachTokenAsync();
+        var res = await _http.PatchAsJsonAsync(
+            $"/api/menu/items/{id}/availability",
+            new { IsAvailable = isAvailable });
+        return res.IsSuccessStatusCode;
+    }
+
     // ── VARIANTS ─────────────────────────────────────────────────────
 
     public async Task<List<VarientModel>> GetVarientsAsync(int menuItemId)

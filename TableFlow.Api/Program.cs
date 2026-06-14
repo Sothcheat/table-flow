@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -51,6 +51,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
     options.AddPolicy("CashierOnly", policy => policy.RequireRole("Cashier"));
     options.AddPolicy("KitchenOnly", policy => policy.RequireRole("Kitchen"));
+    options.AddPolicy("AdminOrKitchen", policy => policy.RequireRole("Admin", "Kitchen"));
 });
 
 builder.Services.AddCors(options =>

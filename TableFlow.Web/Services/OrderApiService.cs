@@ -24,57 +24,6 @@ public class OrderApiService
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
     }
 
-    // ── SESSIONS ─────────────────────────────────────────────────────
-
-    public async Task<(bool Success, SessionModel? Session, string Error)> OpenSessionAsync(int tableId)
-    {
-        await AttachTokenAsync();
-        var res = await _http.PostAsJsonAsync("/api/sessions", new { TableId = tableId });
-        if (res.IsSuccessStatusCode)
-        {
-            var json = await res.Content.ReadAsStringAsync();
-            Console.WriteLine($"Session response JSON: {json}"); // debug
-            var session = System.Text.Json.JsonSerializer.Deserialize<SessionModel>(json,
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            return (true, session, "");
-        }
-        var error = await res.Content.ReadAsStringAsync();
-        return (false, null, error);
-    }
-
-    public async Task<SessionModel?> GetActiveSessionAsync(int tableId)
-    {
-        await AttachTokenAsync();
-        try
-        {
-            var response = await _http.GetAsync($"/api/sessions/table/{tableId}/active");
-            if (response.IsSuccessStatusCode)
-                return await response.Content.ReadFromJsonAsync<SessionModel>();
-
-            var error = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"GetActiveSession failed: {response.StatusCode} - {error}");
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"GetActiveSession exception: {ex.Message}");
-            return null;
-        }
-    }
-
-    public async Task<(bool Success, SessionModel? Session, string Error)> CloseSessionAsync(int sessionId, string paymentMethod)
-    {
-        await AttachTokenAsync();
-        var res = await _http.PatchAsJsonAsync($"/api/sessions/{sessionId}/close", new { PaymentMethod = paymentMethod });
-        if (res.IsSuccessStatusCode)
-        {
-            var session = await res.Content.ReadFromJsonAsync<SessionModel>();
-            return (true, session, "");
-        }
-        var error = await res.Content.ReadAsStringAsync();
-        return (false, null, error);
-    }
-
     // ── ORDERS ───────────────────────────────────────────────────────
 
     public async Task<(bool Success, OrderModel? Order, string Error)> PlaceOrderAsync(int sessionId, List<CartItem> items, string? note = null)

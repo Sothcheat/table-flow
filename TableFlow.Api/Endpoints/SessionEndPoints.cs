@@ -108,14 +108,10 @@ namespace TableFlow.Api.Endpoints
                 {
                     var webBaseUrl = config["WebBaseUrl"] ?? "http://localhost:5010";
                     var menuUrl = $"{webBaseUrl}/menu?sessionId={session.Id}";
-                    Console.WriteLine($"Generating QR for: {menuUrl}");
                     qrCodeBase64 = GenerateQrCode(menuUrl);
-                    Console.WriteLine($"QR generated successfully, length: {qrCodeBase64?.Length}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"QR generation failed: {ex.Message}");
-                    Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 }
 
                 // Reload with includes for response
