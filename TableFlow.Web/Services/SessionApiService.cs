@@ -79,7 +79,7 @@ public class SessionApiService
             var error = await response.Content.ReadAsStringAsync();
             return null;
         }
-        catch (Exception ex)
+        catch (Exception )
         {
             return null;
         }

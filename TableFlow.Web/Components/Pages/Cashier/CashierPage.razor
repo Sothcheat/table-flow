@@ -5,6 +5,7 @@
 @attribute [Authorize(Roles = "Cashier")]
 @inject TableApiService TableApiService
 @inject OrderApiService OrderApiService
+@inject SessionApiService SessionApiService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -88,17 +89,15 @@ else
     {
         if (table.Status == "Available")
         {
-            var (sessionSuccess, session, sessionError) = await OrderApiService.OpenSessionAsync(table.Id);
+            var (sessionSuccess, session, sessionError) = await SessionApiService.OpenSessionAsync(table.Id);
             if (!sessionSuccess)
             {
                 Snackbar.Add($"Failed to open session: {sessionError}", MudBlazor.Severity.Error);
                 return;
             }
 
-            // Reload from API to get accurate state
             await LoadTablesAsync();
             Snackbar.Add($"Table {table.TableNumber} session opened.", MudBlazor.Severity.Success);
-
 
             if (!string.IsNullOrEmpty(session?.QrCodeBase64))
             {
@@ -114,10 +113,10 @@ else
         }
         else
         {
-            var activeSession = await OrderApiService.GetActiveSessionAsync(table.Id);
+            var activeSession = await SessionApiService.GetActiveSessionAsync(table.Id);
             if (activeSession is not null)
             {
-                var (closeSuccess, _, closeError) = await OrderApiService.CloseSessionAsync(activeSession.Id, "Cash");
+                var (closeSuccess, _, closeError) = await SessionApiService.CloseSessionAsync(activeSession.Id, "Cash");
                 if (!closeSuccess)
                 {
                     Snackbar.Add($"Failed to close session: {closeError}", MudBlazor.Severity.Error);
@@ -125,7 +124,6 @@ else
                 }
             }
 
-            // Reload from API to get accurate state
             await LoadTablesAsync();
             Snackbar.Add($"Table {table.TableNumber} marked Available.", MudBlazor.Severity.Success);
         }

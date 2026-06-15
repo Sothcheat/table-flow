@@ -110,7 +110,7 @@ namespace TableFlow.Api.Endpoints
                     var menuUrl = $"{webBaseUrl}/menu?sessionId={session.Id}";
                     qrCodeBase64 = GenerateQrCode(menuUrl);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                 }
 
