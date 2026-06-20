@@ -10,7 +10,37 @@
 @layout EmptyLayout
 
 <PageTitle>Menu — TableFlow</PageTitle>
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="menu-container pa-4">
+
+<style>
+    .menu-container {
+        padding: 16px;
+        overflow-x: hidden;
+        box-sizing: border-box;
+        width: 100%;
+    }
+    @@media (max-width: 599px) {
+        .menu-container {
+            padding: 12px 16px;
+        }
+    }
+    .menu-card {
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .menu-card:active {
+        transform: scale(0.96);
+    }
+    .chip-scroll {
+        overflow-x: auto;
+        white-space: nowrap;
+        scrollbar-width: none;       /* Firefox */
+        -ms-overflow-style: none;    /* IE / Edge */
+    }
+    .chip-scroll::-webkit-scrollbar {
+        display: none;               /* Chrome / Safari / Android */
+    }
+</style>
+
+<div class="menu-container">
 
     @if (!_sessionValid)
     {
@@ -45,7 +75,7 @@
         @* Category Chips *@
         @if (_categories.Any())
         {
-            <div style="overflow-x:auto; white-space:nowrap; padding-bottom:8px;" class="mb-4">
+            <div class="chip-scroll mb-4" style="padding-bottom:8px;">
                 <MudChip T="string"
                          Color="@(_selectedCategoryId == null ? Color.Primary : Color.Default)"
                          Variant="@(_selectedCategoryId == null ? Variant.Filled : Variant.Outlined)"
@@ -69,12 +99,12 @@
         @* Loading Skeletons *@
         @if (_loading)
         {
-            <MudGrid Spacing="4">
+            <MudGrid Spacing="2">
                 @for (int i = 0; i < 8; i++)
                 {
                     <MudItem xs="6" sm="6" md="4" lg="3">
-                        <MudCard>
-                            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Style="width:100%; aspect-ratio:1.333;" />
+                        <MudCard Style="border-radius:12px; overflow:hidden;">
+                            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="170px" Width="100%" />
                             <MudCardContent Class="pa-2">
                                 <MudSkeleton Width="70%" />
                                 <MudSkeleton Width="40%" />
@@ -92,31 +122,35 @@
         }
         else
         {
-            <MudGrid Spacing="4">
+            <MudGrid Spacing="2">
                 @foreach (var item in FilteredItems)
                 {
                     <MudItem xs="6" sm="6" md="4" lg="3">
-                        <MudCard Style="height:100%; display:flex; flex-direction:column; border-radius:12px; overflow:hidden;">
-                            @if (!string.IsNullOrEmpty(item.ImageUrl))
-                            {
-                                @if (!_imageLoaded.ContainsKey(item.Id) || !_imageLoaded[item.Id])
+                        <MudCard Class="menu-card"
+                                 Style="@GetCardStyle(item.IsAvailable)"
+                                 @onclick="@(() => OnCardClick(item))">
+                            @* Image container — always 170px, contain so nothing gets cropped *@
+                            <div style="width:100%; height:170px; background:#F1F5F9; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; flex-shrink:0;">
+                                @if (string.IsNullOrEmpty(item.ImageUrl) || _imageErrors.Contains(item.Id))
                                 {
-                                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Style="width:100%; aspect-ratio:1.333;" />
-                                }
-                                <img src="@item.ImageUrl"
-                                     alt="@item.ItemName"
-                                     style="width:100%; aspect-ratio:1.333; object-fit:cover;"
-                                     hidden="@(!_imageLoaded.ContainsKey(item.Id) || !_imageLoaded[item.Id])"
-                                     @onload="@(() => OnImageLoaded(item.Id))"
-                                     @onerror="@(() => OnImageError(item.Id))" />
-                            }
-                            else
-                            {
-                                <div style="width:100%; aspect-ratio:1.333; background-color:var(--mud-palette-background-grey); display:flex; align-items:center; justify-content:center;">
                                     <MudIcon Icon="@Icons.Material.Filled.Restaurant"
-                                             Style="font-size:2.5rem; color:var(--mud-palette-text-disabled);" />
-                                </div>
-                            }
+                                             Style="font-size:2.5rem; color:#CBD5E1;" />
+                                }
+                                else
+                                {
+                                    @if (!_imageLoaded.ContainsKey(item.Id))
+                                    {
+                                        <MudSkeleton SkeletonType="SkeletonType.Rectangle"
+                                                     Width="100%" Height="170px"
+                                                     Style="position:absolute; top:0; left:0;" />
+                                    }
+                                    <img src="@item.ImageUrl"
+                                         alt="@item.ItemName"
+                                         style="max-width:100%; max-height:170px; object-fit:contain; display:@(_imageLoaded.ContainsKey(item.Id) ? "block" : "none");"
+                                         @onload="@(() => OnImageLoaded(item.Id))"
+                                         @onerror="@(() => OnImageError(item.Id))" />
+                                }
+                            </div>
                             <MudCardContent Class="pa-2" Style="flex:1;">
                                 <MudText Typo="Typo.body1" Style="font-weight:600; line-height:1.2;" Class="mb-1">
                                     @item.ItemName
@@ -128,7 +162,7 @@
                                     $@item.BasePrice.ToString("0.00")
                                 </MudText>
                             </MudCardContent>
-                            <MudCardActions Class="pa-2 pt-0">
+                            <MudCardActions Class="pa-2 pt-0" @onclick:stopPropagation="true">
                                 @if (!item.IsAvailable)
                                 {
                                     <MudChip T="string" Color="Color.Error" Size="Size.Small" Disabled="true" Style="width:100%;">
@@ -194,12 +228,13 @@
                     OnOrderPlaced="OnOrderPlaced" />
     }
 
-</MudContainer>
+</div>
 
 @code {
     private List<CategoryModel> _categories = [];
     private List<MenuItemModel> _menuItems = [];
     private Dictionary<int, bool> _imageLoaded = new();
+    private HashSet<int> _imageErrors = new();
     private bool _loading = true;
     private int? _selectedCategoryId = null;
     private string _searchText = string.Empty;
@@ -246,7 +281,6 @@
         _loading = true;
         _categories = await MenuApiService.GetCategoriesAsync();
         _menuItems = await MenuApiService.GetMenuItemsAsync();
-        Console.WriteLine($"Categories: {_categories.Count}, Items: {_menuItems.Count}");
         _loading = false;
         StateHasChanged();
     }
@@ -271,7 +305,7 @@
 
     private void OnImageError(int itemId)
     {
-        _imageLoaded[itemId] = false;
+        _imageErrors.Add(itemId);
         StateHasChanged();
     }
 
@@ -279,6 +313,18 @@
     {
         _cartOpen = true;
         StateHasChanged();
+    }
+
+    private static string GetCardStyle(bool isAvailable) =>
+        $"height:100%; display:flex; flex-direction:column; border-radius:12px; overflow:hidden; cursor:{(isAvailable ? "pointer" : "default")};";
+
+    private void OnCardClick(MenuItemModel item)
+    {
+        if (!item.IsAvailable) return;
+        if (item.HasVarient)
+            Navigation.NavigateTo($"/menu/item/{item.Id}?sessionId={SessionId}");
+        else
+            AddToCart(item);
     }
 
     private void AddToCart(MenuItemModel item)

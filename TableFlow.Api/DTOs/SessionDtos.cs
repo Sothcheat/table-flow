@@ -21,4 +21,16 @@
     public record CloseSessionRequest(
         string PaymentMethod
     );
+
+    public record SessionStatsResponse(
+        decimal TodayRevenue,
+        int TodayClosedSessions,
+        int OpenSessions,
+        List<TopItemResponse> TopItems
+    );
+
+    public record TopItemResponse(
+        string ItemName,
+        int TotalQuantity
+    );
 }

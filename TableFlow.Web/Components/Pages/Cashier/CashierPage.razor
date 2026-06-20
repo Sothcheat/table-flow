@@ -1,4 +1,4 @@
-﻿@page "/cashier"
+@page "/cashier"
 @using TableFlow.Web.Models
 @using TableFlow.Web.Services
 @using Microsoft.AspNetCore.Authorization
@@ -8,8 +8,25 @@
 @inject SessionApiService SessionApiService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@implements IDisposable
 
-<MudText Typo="Typo.h5" Class="mb-4">Cashier Dashboard</MudText>
+<PageTitle>Cashier Dashboard — TableFlow</PageTitle>
+
+<style>
+    .table-card {
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .table-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18) !important;
+    }
+    .table-card:active {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14) !important;
+    }
+</style>
+
+<MudText Typo="Typo.h2" Style="font-weight:700;" Class="mt-4 mb-8">Cashier Dashboard</MudText>
 
 @if (_loading)
 {
@@ -19,50 +36,114 @@ else
 {
     @* Stats Row *@
     <MudGrid Class="mb-6">
+        @* Table status cards — tinted backgrounds so they stand out *@
         <MudItem xs="12" sm="4">
-            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center">
-                <MudText Typo="Typo.h3" Style="font-weight:700;">@_tables.Count</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Total Tables</MudText>
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center"
+                      Style="background:#EFF6FF; border-radius:10px;">
+                <MudText Typo="Typo.h3" Style="font-weight:700; color:#1E40AF;">@_tables.Count</MudText>
+                <MudText Typo="Typo.body2" Style="color:#475569; font-weight:500;">Total Tables</MudText>
             </MudPaper>
         </MudItem>
         <MudItem xs="12" sm="4">
-            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center">
-                <MudText Typo="Typo.h3" Style="font-weight:700; color: var(--mud-palette-success);">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center"
+                      Style="background:#F0FDF4; border-radius:10px;">
+                <MudText Typo="Typo.h3" Style="font-weight:700; color:#15803D;">
                     @_tables.Count(t => t.Status == "Available")
                 </MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Available</MudText>
+                <MudText Typo="Typo.body2" Style="color:#475569; font-weight:500;">Available</MudText>
             </MudPaper>
         </MudItem>
         <MudItem xs="12" sm="4">
-            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center">
-                <MudText Typo="Typo.h3" Style="font-weight:700; color: var(--mud-palette-error);">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center"
+                      Style="background:#FFFBEB; border-radius:10px;">
+                <MudText Typo="Typo.h3" Style="font-weight:700; color:#B45309;">
                     @_tables.Count(t => t.Status == "Occupied")
                 </MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Occupied</MudText>
+                <MudText Typo="Typo.body2" Style="color:#475569; font-weight:500;">Occupied</MudText>
+            </MudPaper>
+        </MudItem>
+
+        @* Personal shift stats — solid filled hero cards *@
+        <MudItem xs="6">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center"
+                      Style="background:#0D6B63; border-radius:10px;">
+                <MudText Typo="Typo.h3" Style="font-weight:700; color:white;">
+                    $@(_myStats?.TodayRevenue.ToString("0.00") ?? "—")
+                </MudText>
+                <MudText Typo="Typo.body2" Style="color:rgba(255,255,255,0.8); font-weight:500;">My Revenue Today</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center"
+                      Style="background:#4F46E5; border-radius:10px;">
+                <MudText Typo="Typo.h3" Style="font-weight:700; color:white;">
+                    @(_myStats?.TodayClosedSessions.ToString() ?? "—")
+                </MudText>
+                <MudText Typo="Typo.body2" Style="color:rgba(255,255,255,0.8); font-weight:500;">Sessions Closed Today</MudText>
             </MudPaper>
         </MudItem>
     </MudGrid>
 
-    @* Table Grid *@
-    <MudText Typo="Typo.h6" Class="mb-3">Tables</MudText>
+    @* Header row with last-refresh timestamp *@
+    <div style="display:flex; justify-content:space-between; align-items:center;" class="mt-8 mb-4">
+        <MudText Typo="Typo.h3" Style="font-weight:600;">Tables</MudText>
+        <MudText Typo="Typo.body1" Style="font-weight:600;" Color="Color.Secondary">
+            Updated @_lastRefreshed.ToString("HH:mm")
+        </MudText>
+    </div>
+
     <MudGrid>
         @foreach (var table in _tables)
         {
             <MudItem xs="6" sm="4" md="3">
-                <MudPaper Elevation="3"
-                          Class="pa-4 d-flex flex-column align-center justify-center"
-                          Style="@GetCardStyle(table)"
-                          @onclick="@(() => ToggleStatus(table))">
-                    <MudIcon Icon="@Icons.Material.Filled.TableRestaurant"
-                             Style="font-size:2rem; color:white;"
-                             Class="mb-2" />
-                    <MudText Typo="Typo.h6" Style="color:white; font-weight:600;">
-                        Table @table.TableNumber
-                    </MudText>
-                    <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,0.85);">
-                        @table.Status
-                    </MudText>
-                </MudPaper>
+                @if (table.Status == "Available")
+                {
+                    <MudPaper Elevation="2"
+                              Class="pa-4 d-flex flex-column align-center justify-center table-card"
+                              Style="background:#22C55E; cursor:pointer; min-height:130px; border-radius:12px;"
+                              @onclick="@(() => ToggleStatus(table))">
+                        <MudIcon Icon="@Icons.Material.Filled.TableRestaurant"
+                                 Style="font-size:2rem; color:white;" Class="mb-1" />
+                        <MudText Typo="Typo.h6" Style="color:white; font-weight:700;">
+                            Table @table.TableNumber
+                        </MudText>
+                        <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,0.85);">
+                            Tap to open
+                        </MudText>
+                    </MudPaper>
+                }
+                else
+                {
+                    <MudPaper Elevation="2"
+                              Class="pa-4 d-flex flex-column align-center justify-center table-card"
+                              Style="background:#F59E0B; cursor:pointer; min-height:130px; border-radius:12px; position:relative;"
+                              @onclick="@(() => ToggleStatus(table))">
+
+                        @* QR re-show — stopPropagation keeps it from triggering the close flow *@
+                        <div style="position:absolute; top:8px; right:8px;"
+                             @onclick:stopPropagation="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.QrCode2"
+                                           Size="Size.Small"
+                                           Style="background:rgba(255,255,255,0.25); color:white;"
+                                           OnClick="@(() => ShowQrCodeAsync(table))" />
+                        </div>
+
+                        <MudIcon Icon="@Icons.Material.Filled.TableRestaurant"
+                                 Style="font-size:2rem; color:white;" Class="mb-1" />
+                        <MudText Typo="Typo.h6" Style="color:white; font-weight:700;">
+                            Table @table.TableNumber
+                        </MudText>
+                        <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,0.9);">
+                            Occupied
+                        </MudText>
+                        @if (_activeSessions.TryGetValue(table.Id, out var session))
+                        {
+                            <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,0.85); margin-top:2px;">
+                                @GetElapsed(session.OpenedAt)
+                            </MudText>
+                        }
+                    </MudPaper>
+                }
             </MudItem>
         }
     </MudGrid>
@@ -70,29 +151,67 @@ else
 
 @code {
     private List<TableModel> _tables = [];
+    private Dictionary<int, SessionModel> _activeSessions = new();
+    private CashierStatsModel? _myStats;
     private bool _loading = true;
+    private DateTime _lastRefreshed = DateTime.Now;
+    private System.Threading.Timer? _refreshTimer;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadTablesAsync();
 
+        // Silent auto-refresh every 30 seconds
+        _refreshTimer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadTablesAsync(showLoader: false);
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
 
-    private async Task LoadTablesAsync()
+    private async Task LoadTablesAsync(bool showLoader = true)
     {
-        _loading = true;
-        _tables = await TableApiService.GetTablesAsync();
-        _loading = false;
+        if (showLoader) _loading = true;
+
+        // Tables and my stats are independent — fetch in parallel
+        var tablesTask = TableApiService.GetTablesAsync();
+        var statsTask = SessionApiService.GetMyStatsAsync();
+        await Task.WhenAll(tablesTask, statsTask);
+        _tables = tablesTask.Result;
+        _myStats = statsTask.Result;
+
+        // Pre-fetch active sessions for occupied tables in parallel
+        var occupied = _tables.Where(t => t.Status == "Occupied").ToList();
+        _activeSessions = new Dictionary<int, SessionModel>();
+        if (occupied.Any())
+        {
+            var pairs = await Task.WhenAll(occupied.Select(async t =>
+            {
+                var s = await SessionApiService.GetActiveSessionAsync(t.Id);
+                return (TableId: t.Id, Session: s);
+            }));
+            foreach (var p in pairs)
+            {
+                if (p.Session is not null)
+                    _activeSessions[p.TableId] = p.Session;
+            }
+        }
+
+        _lastRefreshed = DateTime.Now;
+        if (showLoader) _loading = false;
     }
 
     private async Task ToggleStatus(TableModel table)
     {
         if (table.Status == "Available")
         {
-            var (sessionSuccess, session, sessionError) = await SessionApiService.OpenSessionAsync(table.Id);
-            if (!sessionSuccess)
+            var (success, session, error) = await SessionApiService.OpenSessionAsync(table.Id);
+            if (!success)
             {
-                Snackbar.Add($"Failed to open session: {sessionError}", MudBlazor.Severity.Error);
+                Snackbar.Add($"Failed to open session: {error}", MudBlazor.Severity.Error);
                 return;
             }
 
@@ -102,41 +221,74 @@ else
             if (!string.IsNullOrEmpty(session?.QrCodeBase64))
             {
                 var parameters = new DialogParameters
-            {
-                { nameof(QrCodeDialog.QrCodeBase64), session.QrCodeBase64 },
-                { nameof(QrCodeDialog.TableNumber), table.TableNumber },
-                { nameof(QrCodeDialog.SessionId), session.Id }
-            };
+                {
+                    { nameof(QrCodeDialog.QrCodeBase64), session.QrCodeBase64 },
+                    { nameof(QrCodeDialog.TableNumber), table.TableNumber },
+                    { nameof(QrCodeDialog.SessionId), session.Id }
+                };
                 var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
                 await DialogService.ShowAsync<QrCodeDialog>("", parameters, options);
             }
         }
         else
         {
-            var activeSession = await SessionApiService.GetActiveSessionAsync(table.Id);
-            if (activeSession is not null)
+            // Use cached active session to skip a redundant API call
+            if (!_activeSessions.TryGetValue(table.Id, out var activeSession))
             {
-                var (closeSuccess, _, closeError) = await SessionApiService.CloseSessionAsync(activeSession.Id, "Cash");
-                if (!closeSuccess)
+                var fetched = await SessionApiService.GetActiveSessionAsync(table.Id);
+                if (fetched is null)
                 {
-                    Snackbar.Add($"Failed to close session: {closeError}", MudBlazor.Severity.Error);
+                    Snackbar.Add("No active session found for this table.", MudBlazor.Severity.Warning);
                     return;
                 }
+                activeSession = fetched;
             }
 
-            await LoadTablesAsync();
-            Snackbar.Add($"Table {table.TableNumber} marked Available.", MudBlazor.Severity.Success);
+            var parameters = new DialogParameters
+            {
+                { nameof(CloseSessionDialog.SessionId), activeSession.Id },
+                { nameof(CloseSessionDialog.TableNumber), table.TableNumber }
+            };
+            var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+            var dialog = await DialogService.ShowAsync<CloseSessionDialog>("Close Session", parameters, options);
+            var result = await dialog.Result;
+            if (result is { Canceled: false })
+                await LoadTablesAsync();
         }
     }
 
-
-
-    private string GetCardStyle(TableModel table)
+    private async Task ShowQrCodeAsync(TableModel table)
     {
-        var bg = table.Status == "Available"
-            ? "var(--mud-palette-success)"
-            : "var(--mud-palette-error)";
+        // Use cached session; fall back to a live fetch if not pre-loaded
+        if (!_activeSessions.TryGetValue(table.Id, out var session))
+            session = await SessionApiService.GetActiveSessionAsync(table.Id);
 
-        return $"background-color:{bg}; cursor:pointer; min-height:120px; transition: background-color 0.3s;";
+        if (session is null || string.IsNullOrEmpty(session.QrCodeBase64))
+        {
+            Snackbar.Add("QR code unavailable for this table.", MudBlazor.Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { nameof(QrCodeDialog.QrCodeBase64), session.QrCodeBase64 },
+            { nameof(QrCodeDialog.TableNumber), table.TableNumber },
+            { nameof(QrCodeDialog.SessionId), session.Id }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        await DialogService.ShowAsync<QrCodeDialog>("", parameters, options);
+    }
+
+    private static string GetElapsed(DateTime openedAt)
+    {
+        var elapsed = DateTime.Now - openedAt.ToLocalTime();
+        if (elapsed.TotalMinutes < 1) return "Just opened";
+        if (elapsed.TotalMinutes < 60) return $"{(int)elapsed.TotalMinutes} min";
+        return $"{(int)elapsed.TotalHours}h {elapsed.Minutes}m";
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
     }
 }

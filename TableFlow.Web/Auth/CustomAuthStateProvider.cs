@@ -85,8 +85,13 @@ namespace TableFlow.Web.Auth
 
         public async Task LogoutAsync()
         {
-            await _storage.DeleteAsync("userId");
-            await _storage.DeleteAsync("authToken");
+            try
+            {
+                await _storage.DeleteAsync("userId");
+                await _storage.DeleteAsync("authToken");
+            }
+            catch (TaskCanceledException) { }
+            catch (InvalidOperationException) { }
             NotifyAuthenticationStateChanged(Task.FromResult(Anonymous));
         }
 

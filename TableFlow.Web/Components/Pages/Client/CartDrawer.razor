@@ -19,78 +19,80 @@
     <div style="display:flex; flex-direction:column; height:100%;">
 
         @* Header *@
-        <div style="padding:16px; display:flex; align-items:center; justify-content:space-between; border-bottom: 1px solid var(--mud-palette-divider);">
-            <MudStack Row="true" AlignItems="AlignItems.Center">
-                <MudIcon Icon="@Icons.Material.Filled.ShoppingCart"/>
-                <MudText Typo="Typo.h4" Style="font-weight:700;">
-                    Your Cart (@CartService.TotalCount)
-                </MudText>
-            </MudStack>
-            <MudIconButton Icon="@Icons.Material.Filled.Close"
-                           OnClick="CloseDrawer" />
+        <div style="padding:16px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--mud-palette-divider); flex-shrink:0;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div style="width:36px;height:36px;border-radius:9px;background:rgba(13,107,99,0.1);display:flex;align-items:center;justify-content:center;">
+                    <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Style="color:#0D6B63; font-size:1.2rem;" />
+                </div>
+                <div>
+                    <MudText Typo="Typo.h5" Style="font-weight:700; line-height:1.1;">Your Cart</MudText>
+                    <MudText Typo="Typo.caption" Style="color:#64748B;">@CartService.TotalCount item@(CartService.TotalCount == 1 ? "" : "s")</MudText>
+                </div>
+            </div>
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="CloseDrawer" />
         </div>
 
         @* Cart Items *@
-        <div style="flex:1; overflow-y:auto; padding:16px;">
+        <div style="flex:1; overflow-y:auto; padding:16px 20px;">
             @if (!CartService.Items.Any())
             {
-                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:200px; gap:12px; opacity:0.5;">
-                    <MudIcon Icon="@Icons.Material.Filled.ShoppingCartCheckout"
-                             Style="font-size:4rem;" />
-                    <MudText Typo="Typo.body1">Your cart is empty</MudText>
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:260px; gap:14px;">
+                    <div style="width:72px;height:72px;border-radius:50%;background:#F1F5F9;display:flex;align-items:center;justify-content:center;">
+                        <MudIcon Icon="@Icons.Material.Filled.ShoppingCartCheckout" Style="font-size:2.2rem; color:#CBD5E1;" />
+                    </div>
+                    <div style="text-align:center;">
+                        <MudText Typo="Typo.body1" Style="font-weight:600; color:#334155;">Your cart is empty</MudText>
+                        <MudText Typo="Typo.caption" Style="color:#94A3B8;">Add items from the menu to get started</MudText>
+                    </div>
                 </div>
             }
             else
             {
                 @foreach (var item in CartService.Items)
                 {
-                    <MudPaper Elevation="1" Class="pa-3 mb-3" Style="border-radius:10px;">
-                        <div style="display:flex; gap:12px; align-items:flex-start;">
-                            <div style="flex:1;">
-                                <MudText Typo="Typo.body1" Style="font-weight:600;">
+                    <MudPaper Elevation="0" Class="pa-3 mb-3"
+                              Style="border-radius:12px; border:1px solid rgba(0,0,0,0.08);">
+                        @* Top row: name + delete *@
+                        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:4px;">
+                            <div style="flex:1; min-width:0;">
+                                <MudText Typo="Typo.body1" Style="font-weight:600; color:#1E293B; line-height:1.3;">
                                     @item.ItemName
                                 </MudText>
                                 @if (!string.IsNullOrEmpty(item.VarientName))
                                 {
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                        @item.VarientName
-                                    </MudText>
+                                    <span style="font-size:0.75rem; color:#6366F1; font-weight:500;">@item.VarientName</span>
                                 }
                                 @if (!string.IsNullOrEmpty(item.Note))
                                 {
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                        Note: @item.Note
-                                    </MudText>
+                                    <div style="display:flex; align-items:center; gap:3px; margin-top:2px;">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Notes" Style="font-size:0.85rem; color:#94A3B8;" />
+                                        <span style="font-size:0.72rem; color:#94A3B8;">@item.Note</span>
+                                    </div>
                                 }
-                                <MudText Typo="Typo.body2" Color="Color.Primary"
-                                         Style="font-weight:600;" Class="mt-1">
-                                    $@item.UnitPrice.ToString("0.00") each
-                                </MudText>
                             </div>
-                            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                               Color="Color.Error"
+                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                           Size="Size.Small"
+                                           Style="color:#94A3B8; margin-top:-4px; margin-right:-6px;"
+                                           OnClick="@(() => CartService.RemoveItem(item.Key))" />
+                        </div>
+
+                        @* Bottom row: qty controls + subtotal *@
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
+                            <div style="display:flex; align-items:center; gap:4px; background:#F8FAFC; border-radius:8px; padding:3px;">
+                                <MudIconButton Icon="@Icons.Material.Filled.Remove"
                                                Size="Size.Small"
-                                               OnClick="@(() => CartService.RemoveItem(item.Key))" />
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    <MudIconButton Icon="@Icons.Material.Filled.Remove"
-                                                   Variant="Variant.Outlined"
-                                                   Color="Color.Primary"
-                                                   Size="Size.Small"
-                                                   Disabled="@(item.Quantity <= 1)"
-                                                   OnClick="@(() => CartService.UpdateQuantity(item.Key, item.Quantity - 1))" />
-                                    <MudText Typo="Typo.body1" Style="font-weight:700; min-width:20px; text-align:center;">
-                                        @item.Quantity
-                                    </MudText>
-                                    <MudIconButton Icon="@Icons.Material.Filled.Add"
-                                                   Variant="Variant.Outlined"
-                                                   Color="Color.Primary"
-                                                   Size="Size.Small"
-                                                   OnClick="@(() => CartService.UpdateQuantity(item.Key, item.Quantity + 1))" />
-                                </div>
-                                <MudText Typo="Typo.body2" Style="font-weight:700;">
-                                    $@item.TotalPrice.ToString("0.00")
-                                </MudText>
+                                               Style="@(item.Quantity <= 1 ? "color:#CBD5E1;" : "color:#0D6B63;")"
+                                               Disabled="@(item.Quantity <= 1)"
+                                               OnClick="@(() => CartService.UpdateQuantity(item.Key, item.Quantity - 1))" />
+                                <span style="font-size:0.9rem; font-weight:700; min-width:22px; text-align:center; color:#1E293B;">@item.Quantity</span>
+                                <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                               Size="Size.Small"
+                                               Style="color:#0D6B63;"
+                                               OnClick="@(() => CartService.UpdateQuantity(item.Key, item.Quantity + 1))" />
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-size:1rem; font-weight:700; color:#0D6B63;">$@item.TotalPrice.ToString("0.00")</div>
+                                <div style="font-size:0.7rem; color:#94A3B8;">$@item.UnitPrice.ToString("0.00") each</div>
                             </div>
                         </div>
                     </MudPaper>
@@ -101,10 +103,10 @@
         @* Footer *@
         @if (CartService.Items.Any())
         {
-            <div style="padding:16px; border-top: 1px solid var(--mud-palette-divider);">
-                <div style="display:flex; justify-content:space-between; align-items:center;" class="mb-3">
-                    <MudText Typo="Typo.h6">Total</MudText>
-                    <MudText Typo="Typo.h6" Color="Color.Primary" Style="font-weight:700;">
+            <div style="padding:16px 20px; border-top:1px solid var(--mud-palette-divider); flex-shrink:0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#F8FAFC; border-radius:10px; padding:12px 16px; margin-bottom:12px;">
+                    <MudText Typo="Typo.body1" Style="font-weight:600; color:#475569;">Order Total</MudText>
+                    <MudText Typo="Typo.h5" Style="font-weight:700; color:#0D6B63;">
                         $@CartService.TotalAmount.ToString("0.00")
                     </MudText>
                 </div>
@@ -118,8 +120,12 @@
                     @if (_placing)
                     {
                         <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Placing Order…</span>
                     }
-                    Place Order
+                    else
+                    {
+                        <span>Place Order</span>
+                    }
                 </MudButton>
                 <MudButton Variant="Variant.Text"
                            Color="Color.Error"

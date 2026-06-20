@@ -1,0 +1,144 @@
+@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+@inject OrderApiService OrderApiService
+@inject SessionApiService SessionApiService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudStack Spacing="2">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="32px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="32px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="32px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="24px" Width="40%" Class="ml-auto" />
+            </MudStack>
+        }
+        else
+        {
+            <MudText Typo="Typo.subtitle1" Class="mb-3">
+                Table @TableNumber — Bill Summary
+            </MudText>
+
+            @if (_billLines.Count == 0)
+            {
+                <MudText Color="Color.Secondary">No orders found for this session.</MudText>
+            }
+            else
+            {
+                <MudPaper Elevation="0" Class="border rounded pa-0 mb-4">
+                    <MudTable Items="_billLines" Dense="true" Hover="false" Elevation="0" T="BillLine">
+                        <HeaderContent>
+                            <MudTh>Item</MudTh>
+                            <MudTh Style="text-align:center">Qty</MudTh>
+                            <MudTh Style="text-align:right">Price</MudTh>
+                        </HeaderContent>
+                        <RowTemplate Context="line">
+                            <MudTd>
+                                <MudText Typo="Typo.body2">@line.ItemName</MudText>
+                                @if (!string.IsNullOrEmpty(line.VarientName))
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@line.VarientName</MudText>
+                                }
+                            </MudTd>
+                            <MudTd Style="text-align:center">
+                                <MudText Typo="Typo.body2">@line.Quantity</MudText>
+                            </MudTd>
+                            <MudTd Style="text-align:right">
+                                <MudText Typo="Typo.body2">$@line.TotalPrice.ToString("0.00")</MudText>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+
+                <MudDivider Class="mb-3" />
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                    <MudText Typo="Typo.h4">Total</MudText>
+                    <MudText Typo="Typo.h4" Style="font-weight:700" Color="Color.Primary">$@_grandTotal.ToString("0.00")</MudText>
+                </MudStack>
+            }
+
+            <MudText Typo="Typo.h5" Class="mb-2">Payment Method</MudText>
+            <MudStack Row="true" Spacing="2" Class="mb-2">
+                <MudButton Variant="@(_paymentMethod == "Cash" ? Variant.Filled : Variant.Outlined)"
+                           Color="Color.Primary"
+                           OnClick="@(() => _paymentMethod = "Cash")">
+                    Cash
+                </MudButton>
+                <MudButton Variant="@(_paymentMethod == "KHQR" ? Variant.Filled : Variant.Outlined)"
+                           Color="Color.Primary"
+                           OnClick="@(() => _paymentMethod = "KHQR")">
+                    KHQR
+                </MudButton>
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_closing">Cancel</MudButton>
+        <MudButton Color="Color.Error"
+                   Variant="Variant.Filled"
+                   OnClick="ConfirmCloseAsync"
+                   Disabled="_loading || _closing">
+            @if (_closing)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Confirm &amp; Close
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int SessionId { get; set; }
+    [Parameter] public int TableNumber { get; set; }
+
+    private record BillLine(string ItemName, string? VarientName, int Quantity, decimal TotalPrice);
+
+    private List<OrderModel> _orders = [];
+    private List<BillLine> _billLines = [];
+    private decimal _grandTotal;
+    private string _paymentMethod = "Cash";
+    private bool _loading = true;
+    private bool _closing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _orders = await OrderApiService.GetSessionOrdersAsync(SessionId);
+        _grandTotal = _orders.Sum(o => o.OrderTotal);
+
+        // Merge identical items across all orders in the session
+        _billLines = _orders
+            .SelectMany(o => o.Items)
+            .GroupBy(i => (i.MenuItemId, i.VarientId))
+            .Select(g => new BillLine(
+                g.First().ItemName,
+                g.First().VarientName,
+                g.Sum(i => i.Quantity),
+                g.Sum(i => i.TotalPrice)
+            ))
+            .ToList();
+
+        _loading = false;
+    }
+
+    private async Task ConfirmCloseAsync()
+    {
+        _closing = true;
+        var (success, _, error) = await SessionApiService.CloseSessionAsync(SessionId, _paymentMethod);
+        _closing = false;
+
+        if (success)
+        {
+            Snackbar.Add($"Table {TableNumber} session closed.", MudBlazor.Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add($"Failed to close session: {error}", MudBlazor.Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -10,16 +10,38 @@
 @attribute [AllowAnonymous]
 
 <PageTitle>@(_item?.ItemName ?? "Loading...") — TableFlow</PageTitle>
+
+<style>
+    .add-cta {
+        margin-top: 16px;
+    }
+    @@media (max-width: 599px) {
+        .add-cta {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 12px 16px 20px;
+            background: white;
+            box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+            z-index: 100;
+            margin-top: 0;
+        }
+        .detail-body {
+            padding-bottom: 90px;
+        }
+    }
+</style>
 @if (!_sessionValid)
 {
-    <MudContainer MaxWidth="MaxWidth.Small" Class="pa-8 text-center">
+    <div style="max-width:600px; margin:0 auto; padding:32px 16px; text-align:center;">
         <MudIcon Icon="@Icons.Material.Filled.QrCodeScanner" Style="font-size:4rem;" Class="mb-4" />
         <MudText Typo="Typo.h6">Please scan the QR code at your table to view the menu.</MudText>
-    </MudContainer>
+    </div>
 }
 else
 {
-    <MudContainer MaxWidth="MaxWidth.Small" Class="menu-container pa-4">
+    <div style="max-width:600px; margin:0 auto; padding:16px; box-sizing:border-box; width:100%;">
 
         @* Back Button *@
         <MudButton StartIcon="@Icons.Material.Filled.ArrowBack"
@@ -33,11 +55,11 @@ else
         @if (_loading)
         {
             @* Loading Skeleton *@
-            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Style="width:100%; aspect-ratio:1.333;" Class="mb-4" />
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="260px" Width="100%" Style="border-radius:12px;" Class="mb-4" />
             <MudSkeleton Width="60%" Height="32px" Class="mb-2" />
             <MudSkeleton Width="30%" Height="24px" Class="mb-4" />
-            <MudSkeleton Width="100%" Height="48px" Class="mb-2" />
-            <MudSkeleton Width="100%" Height="48px" Class="mb-2" />
+            <MudSkeleton Width="100%" Height="56px" Class="mb-2" />
+            <MudSkeleton Width="100%" Height="56px" Class="mb-2" />
         }
         else if (_item is null)
         {
@@ -45,29 +67,33 @@ else
         }
         else
         {
-            @* Hero Image *@
-            @if (!string.IsNullOrEmpty(_item.ImageUrl))
-            {
-                @if (!_imageLoaded)
+            <div class="detail-body">
+            @* Hero Image — contain so no cropping regardless of image dimensions *@
+            <div style="width:100%; height:260px; background:#F1F5F9; border-radius:12px;
+                        display:flex; align-items:center; justify-content:center;
+                        overflow:hidden; position:relative;" class="mb-4">
+                @if (string.IsNullOrEmpty(_item.ImageUrl) || _imageError)
                 {
-                    <MudSkeleton SkeletonType="SkeletonType.Rectangle"
-                                 Style="width:100%; aspect-ratio:1.333;"
-                                 Class="mb-4" />
+                    <MudStack AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@Icons.Material.Filled.Restaurant"
+                                 Style="font-size:4rem; color:#CBD5E1;" />
+                    </MudStack>
                 }
-                <img src="@_item.ImageUrl"
-                     alt="@_item.ItemName"
-                     style="width:100%; aspect-ratio:1.333; object-fit:cover; border-radius:12px;"
-                     hidden="@(!_imageLoaded)"
-                     @onload="@(() => { _imageLoaded = true; StateHasChanged(); })"
-                     @onerror="@(() => { _imageLoaded = true; StateHasChanged(); })" />
-            }
-            else
-            {
-                <div style="width:100%; aspect-ratio:1.333; background-color:var(--mud-palette-background-grey); display:flex; align-items:center; justify-content:center; border-radius:12px;" class="mb-4">
-                    <MudIcon Icon="@Icons.Material.Filled.Restaurant"
-                             Style="font-size:4rem; color:var(--mud-palette-text-disabled);" />
-                </div>
-            }
+                else
+                {
+                    @if (!_imageLoaded)
+                    {
+                        <MudSkeleton SkeletonType="SkeletonType.Rectangle"
+                                     Width="100%" Height="260px"
+                                     Style="position:absolute; top:0; left:0;" />
+                    }
+                    <img src="@_item.ImageUrl"
+                         alt="@_item.ItemName"
+                         style="max-width:100%; max-height:260px; object-fit:contain; display:@(_imageLoaded ? "block" : "none");"
+                         @onload="@(() => { _imageLoaded = true; StateHasChanged(); })"
+                         @onerror="@(() => { _imageError = true; _imageLoaded = true; StateHasChanged(); })" />
+                }
+            </div>
 
             @* Item Info *@
             <MudText Typo="Typo.h5" Style="font-weight:700;" Class="mt-4 mb-1">@_item.ItemName</MudText>
@@ -81,7 +107,7 @@ else
             }
 
             @* Variant Picker *@
-            <MudText Typo="Typo.h6" Style="font-weight:600;" Class="mt-4 mb-2">Choose a size</MudText>
+            <MudText Typo="Typo.h6" Style="font-weight:600;" Class="mt-4 mb-2">Choose your option</MudText>
 
             @foreach (var variant in _item.Varients.Where(v => v.IsAvailable).OrderBy(v => v.Price))
             {
@@ -125,17 +151,30 @@ else
                 }
             }
 
-            @* Add to Cart Button *@
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       FullWidth="true"
-                       Size="Size.Large"
-                       StartIcon="@Icons.Material.Filled.AddShoppingCart"
-                       Disabled="@(_selectedVariant == null || !_item.IsAvailable)"
-                       Class="mt-4"
-                       OnClick="AddToCart">
-                @(_selectedVariant == null ? "Select a size first" : "Add to Cart")
-            </MudButton>
+            </div> @* end detail-body *@
+
+            <div class="add-cta">
+                @if (_selectedVariant == null || !_item.IsAvailable)
+                {
+                    <div style="background:#E2E8F0; border-radius:8px; padding:15px 16px;
+                                text-align:center; cursor:default; user-select:none;">
+                        <span style="color:#64748B; font-weight:600; font-size:0.9375rem;">
+                            @(!_item.IsAvailable ? "This item is currently unavailable" : "Select an option above to continue")
+                        </span>
+                    </div>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               Size="Size.Large"
+                               StartIcon="@Icons.Material.Filled.AddShoppingCart"
+                               OnClick="AddToCart">
+                        Add to Cart — $@_selectedVariant.Price.ToString("0.00")
+                    </MudButton>
+                }
+            </div>
         }
         @* Floating Cart Button *@
         @if (!_cartOpen)
@@ -165,7 +204,7 @@ else
                     SessionId="@(SessionId ?? 0)"
                     OnOrderPlaced="OnOrderPlaced" />
 
-    </MudContainer>
+    </div>
 }
 
 
@@ -176,6 +215,7 @@ else
     private MenuItemModel? _item;
     private bool _loading = true;
     private bool _imageLoaded = false;
+    private bool _imageError = false;
     private CartDrawer _cartDrawer = null!;
     private int _quantity = 1;
     private VarientModel? _selectedVariant = null;

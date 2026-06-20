@@ -1,4 +1,4 @@
-﻿@using TableFlow.Web.Models
+@using TableFlow.Web.Models
 
 <MudDialog Style="min-width: 480px;">
     <TitleContent>
@@ -10,38 +10,35 @@
         <MudStack Spacing="3">
 
             <!-- Hero Image -->
-            @if (!_imageLoaded && !_imageError)
-            {
-                <MudSkeleton SkeletonType="SkeletonType.Rectangle"
-                             Height="480px"
-                             Width="100%" />
-            }
+            <div style="width:100%; height:270px; border-radius:10px; background:#F1F5F9;
+                        display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                @if (!_imageLoaded && !_imageError)
+                {
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle"
+                                 Height="270px"
+                                 Width="100%"
+                                 Style="border-radius:10px;" />
+                }
 
-            @if (!_imageError)
-            {
-                <img src="@Item.ImageUrl"
-                     style="width:100%; height:480px; object-fit:cover; border-radius:8px;
-                @(!_imageLoaded ? "display:none;" : "")"
-                     @onload="() => _imageLoaded = true"
-                     @onerror="() => { _imageError = true; _imageLoaded = true; }" />
-            }
+                @if (!_imageError)
+                {
+                    <img src="@Item.ImageUrl"
+                         style="max-width:100%; max-height:270px; object-fit:contain;
+                         @(!_imageLoaded ? "display:none;" : "")"
+                         @onload="() => _imageLoaded = true"
+                         @onerror="() => { _imageError = true; _imageLoaded = true; }" />
+                }
 
-            @if (_imageError)
-            {
-                <MudPaper Elevation="0"
-                          Style="width:100%; height:480px; border-radius:8px;
-                    background:#f5f5f5; display:flex;
-                    align-items:center; justify-content:center;">
+                @if (_imageError)
+                {
                     <MudStack AlignItems="AlignItems.Center" Spacing="1">
-                        <MudIcon Icon="@Icons.Material.Filled.BrokenImage"
+                        <MudIcon Icon="@Icons.Material.Filled.NoPhotography"
                                  Size="Size.Large"
-                                 Color="Color.Default" />
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">
-                            No image available
-                        </MudText>
+                                 Style="color:#CBD5E1;" />
+                        <MudText Typo="Typo.caption" Style="color:#94A3B8;">No image</MudText>
                     </MudStack>
-                </MudPaper>
-            }
+                }
+            </div>
 
             <!-- Item Info -->
             <MudStack Spacing="1">
@@ -105,7 +102,15 @@
         </MudStack>
     </DialogContent>
     <DialogActions>
-        <MudButton Variant="Variant.Filled" OnClick="Close" Class="mr-4 my-2">Close</MudButton>
+        <div class="mb-2 mr-4" style="display:flex; gap:8px;">
+            <MudButton Variant="Variant.Text" OnClick="Close">Close</MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Edit"
+                       OnClick="OpenEdit">
+                Edit Item
+            </MudButton>
+        </div>
     </DialogActions>
 </MudDialog>
 
@@ -118,11 +123,9 @@
 
     protected override void OnParametersSet()
     {
-        // Reset image state when item changes
         _imageLoaded = false;
         _imageError = false;
 
-        // If no image URL provided, go straight to error state
         if (string.IsNullOrWhiteSpace(Item.ImageUrl))
         {
             _imageLoaded = true;
@@ -131,4 +134,5 @@
     }
 
     private void Close() => MudDialog.Cancel();
+    private void OpenEdit() => MudDialog.Close(DialogResult.Ok(true));
 }

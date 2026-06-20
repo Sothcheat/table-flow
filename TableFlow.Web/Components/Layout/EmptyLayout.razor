@@ -1,4 +1,4 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 
 <MudThemeProvider Theme="@TableFlowTheme.Theme" />
 <MudPopoverProvider />
@@ -6,6 +6,11 @@
 <MudSnackbarProvider />
 
 <MudLayout>
+    <MudAppBar Elevation="0" Color="Color.Primary" Fixed="true"
+               Style="border-bottom:1px solid rgba(255,255,255,0.12);">
+        <MudIcon Icon="@Icons.Material.Filled.Restaurant" Size="Size.Small" Class="mr-2" />
+        <MudText Typo="Typo.h3" Style="font-weight:700; letter-spacing:0.05em;">TableFlow</MudText>
+    </MudAppBar>
     <MudMainContent>
         @Body
     </MudMainContent>
