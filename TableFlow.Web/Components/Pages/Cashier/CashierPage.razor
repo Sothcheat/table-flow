@@ -119,12 +119,18 @@ else
                               Style="background:#F59E0B; cursor:pointer; min-height:130px; border-radius:12px; position:relative;"
                               @onclick="@(() => ToggleStatus(table))">
 
-                        @* QR re-show — stopPropagation keeps it from triggering the close flow *@
-                        <div style="position:absolute; top:8px; right:8px;"
+                        @* Action buttons — stopPropagation keeps them from triggering the close flow *@
+                        <div style="position:absolute; top:8px; right:8px; display:flex; gap:4px;"
                              @onclick:stopPropagation="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.ReceiptLong"
+                                           Size="Size.Small"
+                                           Style="background:rgba(255,255,255,0.25); color:white;"
+                                           Title="View orders"
+                                           OnClick="@(() => ShowOrdersAsync(table))" />
                             <MudIconButton Icon="@Icons.Material.Filled.QrCode2"
                                            Size="Size.Small"
                                            Style="background:rgba(255,255,255,0.25); color:white;"
+                                           Title="Show QR code"
                                            OnClick="@(() => ShowQrCodeAsync(table))" />
                         </div>
 
@@ -255,6 +261,33 @@ else
             if (result is { Canceled: false })
                 await LoadTablesAsync();
         }
+    }
+
+    private async Task ShowOrdersAsync(TableModel table)
+    {
+        if (!_activeSessions.TryGetValue(table.Id, out var session))
+        {
+            session = await SessionApiService.GetActiveSessionAsync(table.Id);
+            if (session is null)
+            {
+                Snackbar.Add("No active session found.", MudBlazor.Severity.Warning);
+                return;
+            }
+        }
+
+        var parameters = new DialogParameters
+        {
+            { nameof(OrderItemsDialog.SessionId), session.Id },
+            { nameof(OrderItemsDialog.TableNumber), table.TableNumber }
+        };
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true
+        };
+        await DialogService.ShowAsync<OrderItemsDialog>("", parameters, options);
     }
 
     private async Task ShowQrCodeAsync(TableModel table)

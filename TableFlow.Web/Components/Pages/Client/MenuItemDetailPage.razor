@@ -1,6 +1,7 @@
 ﻿@page "/menu/item/{Id:int}"
 @using TableFlow.Web.Models
 @using TableFlow.Web.Services
+@using Microsoft.AspNetCore.Components.Sections
 @inject CartService CartService
 @inject MenuApiService MenuApiService
 @inject SessionApiService SessionApiService
@@ -8,6 +9,7 @@
 @inject ISnackbar Snackbar
 @layout EmptyLayout
 @attribute [AllowAnonymous]
+@implements IDisposable
 
 <PageTitle>@(_item?.ItemName ?? "Loading...") — TableFlow</PageTitle>
 
@@ -32,6 +34,29 @@
         }
     }
 </style>
+@* Cart icon in the app bar — only when session is valid *@
+@if (_sessionValid)
+{
+    <SectionContent SectionName="client-cart-tool">
+        <div style="position:relative; display:inline-flex; align-items:center; justify-content:center;">
+            <MudIconButton Icon="@Icons.Material.Filled.ShoppingCart"
+                           Style="color:white;"
+                           Title="View cart"
+                           OnClick="OpenCart" />
+            @if (CartService.TotalCount > 0)
+            {
+                <div style="position:absolute; top:6px; right:6px;
+                    background:#EF4444; color:white; border-radius:50%;
+                    min-width:16px; height:16px; padding:0 3px;
+                    display:flex; align-items:center; justify-content:center;
+                    font-size:9px; font-weight:700; pointer-events:none; line-height:1;">
+                    @CartService.TotalCount
+                </div>
+            }
+        </div>
+    </SectionContent>
+}
+
 @if (!_sessionValid)
 {
     <div style="max-width:600px; margin:0 auto; padding:32px 16px; text-align:center;">
@@ -176,28 +201,6 @@ else
                 }
             </div>
         }
-        @* Floating Cart Button *@
-        @if (!_cartOpen)
-        {
-            <div style="position:fixed; bottom:24px; right:24px; z-index:9999;">
-                <div style="position:relative; display:inline-flex;">
-                    <MudFab Color="Color.Primary"
-                            StartIcon="@Icons.Material.Filled.ShoppingCart"
-                            OnClick="OpenCart" />
-                    @if (CartService.TotalCount > 0)
-                    {
-                        <div style="position:absolute; top:-8px; right:-8px;
-                            background:var(--mud-palette-error);
-                            color:white; border-radius:50%;
-                            width:22px; height:22px;
-                            display:flex; align-items:center; justify-content:center;
-                            font-size:11px; font-weight:700; pointer-events:none;">
-                            @CartService.TotalCount
-                        </div>
-                    }
-                </div>
-            </div>
-        }
         @* Cart Drawer *@
         <CartDrawer @ref="_cartDrawer"
                     @bind-Open="_cartOpen"
@@ -221,6 +224,13 @@ else
     private VarientModel? _selectedVariant = null;
     private bool _cartOpen = false;
     private bool _sessionValid = false;
+
+    protected override void OnInitialized()
+    {
+        CartService.OnCartChanged += OnCartChanged;
+    }
+
+    private void OnCartChanged() => InvokeAsync(StateHasChanged);
 
     [SupplyParameterFromQuery(Name = "sessionId")]
     public int? SessionId { get; set; }
@@ -251,11 +261,7 @@ else
         _selectedVariant = variant;
     }
 
-    private void OpenCart()
-    {
-        _cartOpen = true;
-        StateHasChanged();
-    }
+    private void OpenCart() => _cartOpen = !_cartOpen;
 
     private void AddToCart()
     {
@@ -272,7 +278,7 @@ else
             Quantity = _quantity
         });
 
-        Snackbar.Add($"{_quantity}x {_item.ItemName} ({_selectedVariant.VarientName}) added to cart.", MudBlazor.Severity.Success);
+        Snackbar.Add($"{_item.ItemName} added to cart.", MudBlazor.Severity.Success);
         _quantity = 1;
         _selectedVariant = null;
     }
@@ -286,5 +292,10 @@ else
     {
         var border = isSelected ? "var(--mud-palette-primary)" : "transparent";
         return $"cursor:pointer; border-radius:10px; border: 2px solid {border};";
+    }
+
+    public void Dispose()
+    {
+        CartService.OnCartChanged -= OnCartChanged;
     }
 }

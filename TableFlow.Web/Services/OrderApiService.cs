@@ -75,6 +75,13 @@ public class OrderApiService
         return await res.Content.ReadFromJsonAsync<List<OrderModel>>() ?? new List<OrderModel>();
     }
 
+    public async Task<List<OrderModel>> GetSessionOrdersClientAsync(int sessionId)
+    {
+        var res = await _http.GetAsync($"/api/orders/session/{sessionId}");
+        if (!res.IsSuccessStatusCode) return new List<OrderModel>();
+        return await res.Content.ReadFromJsonAsync<List<OrderModel>>() ?? new List<OrderModel>();
+    }
+
     // ── KITCHEN ──────────────────────────────────────────────────────
 
     public async Task<List<OrderModel>> GetKitchenOrdersAsync()

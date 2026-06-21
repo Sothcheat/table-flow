@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using System.Runtime.InteropServices.JavaScript;
+using Microsoft.JSInterop;
 using System.Security.Claims;
 using TableFlow.Api.Data;
 using TableFlow.Api.Data.Entities;
@@ -70,6 +70,10 @@ namespace TableFlow.Web.Auth
             {
                 return Anonymous;
             }
+            catch (JSDisconnectedException)
+            {
+                return Anonymous;
+            }
             catch (JSException)
             {
                 return Anonymous;
@@ -92,7 +96,14 @@ namespace TableFlow.Web.Auth
             }
             catch (TaskCanceledException) { }
             catch (InvalidOperationException) { }
-            NotifyAuthenticationStateChanged(Task.FromResult(Anonymous));
+            catch (JSDisconnectedException) { }
+            catch (JSException) { }
+
+            try
+            {
+                NotifyAuthenticationStateChanged(Task.FromResult(Anonymous));
+            }
+            catch (ObjectDisposedException) { }
         }
 
         public async Task<string?> GetTokenAsync()
@@ -102,10 +113,10 @@ namespace TableFlow.Web.Auth
                 var result = await _storage.GetAsync<string>("authToken");
                 return result.Success ? result.Value : null;
             }
-            catch
-            {
-                return null;
-            }
+            catch (JSDisconnectedException) { return null; }
+            catch (JSException) { return null; }
+            catch (TaskCanceledException) { return null; }
+            catch (InvalidOperationException) { return null; }
         }
     }
 }

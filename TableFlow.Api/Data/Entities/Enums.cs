@@ -33,7 +33,8 @@
             Waiting,
             Preparing,
             Done,
-            Unavailable
+            Unavailable,
+            Delivered
         }
     
 }
