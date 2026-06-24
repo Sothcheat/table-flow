@@ -12,7 +12,6 @@ public class LoginValidator : AbstractValidator<LoginModel>
             .EmailAddress().WithMessage("Please enter a valid email address.");
 
         RuleFor(x => x.Password)
-            .NotEmpty().WithMessage("Password is required.")
-            .MinimumLength(6).WithMessage("Password must be at least 6 characters.");
+            .NotEmpty().WithMessage("Password is required.");
     }
 }

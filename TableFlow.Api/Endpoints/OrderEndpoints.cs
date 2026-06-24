@@ -33,7 +33,7 @@ namespace TableFlow.Api.Endpoints
 
                 var response = orderList.Select(MapToResponse).ToList();
                 return Results.Ok(response);
-            });
+            }).AllowAnonymous();
 
             // GET single order by id
             orders.MapGet("/{id:int}", async (
@@ -206,7 +206,7 @@ namespace TableFlow.Api.Endpoints
                     item.OrderItemStatus.ToString(),
                     item.Note
                 ));
-            }).RequireAuthorization("KitchenOnly");
+            }).RequireAuthorization("KitchenOrCashier");
         }
 
         private static OrderResponse MapToResponse(Order order) => new(

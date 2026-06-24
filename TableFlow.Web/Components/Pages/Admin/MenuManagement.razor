@@ -23,9 +23,9 @@
     <!-- ── TAB 1: CATEGORIES ── -->
     <MudTabPanel Text="Categories" Style="font-weight:bold">
         <MudStack Row="true" Class="ma-4" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-            <MudTextField Value="_searchText"
+            <MudTextField Value="_categorySearch"
                           Immediate="true"
-                          ValueChanged="@((string val) => _searchText = val)"
+                          ValueChanged="@((string val) => _categorySearch = val)"
                           Label="Search Categories"
                           Placeholder="Search categories..."
                           Variant="Variant.Outlined"
@@ -76,9 +76,9 @@
     <!-- ── TAB 2: MENU ITEMS ── -->
     <MudTabPanel Text="Menu Items" Style="font-weight:bold">
         <MudStack Row="true" Class="ma-4" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-            <MudTextField Value="_searchText"
+            <MudTextField Value="_itemSearch"
                           Immediate="true"
-                          ValueChanged="@((string val) => _searchText = val)"
+                          ValueChanged="@((string val) => _itemSearch = val)"
                           Label="Search Items"
                           Placeholder="Search items..."
                           Variant="Variant.Outlined"
@@ -177,21 +177,21 @@
         _loadingItems = false;
     }
 
-    private string _searchText = string.Empty;
+    private string _categorySearch = string.Empty;
+    private string _itemSearch = string.Empty;
 
     private IEnumerable<MenuItemModel> _filteredItems =>
-        string.IsNullOrWhiteSpace(_searchText)
+        string.IsNullOrWhiteSpace(_itemSearch)
             ? _menuItems
             : _menuItems.Where(i =>
-                i.ItemName.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
-                i.CategoryName.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+                i.ItemName.Contains(_itemSearch, StringComparison.OrdinalIgnoreCase) ||
+                i.CategoryName.Contains(_itemSearch, StringComparison.OrdinalIgnoreCase));
 
     private IEnumerable<CategoryModel> _filteredCategories =>
-        string.IsNullOrWhiteSpace(_searchText)
+        string.IsNullOrWhiteSpace(_categorySearch)
             ? _categories
-            : _categories.Where(i =>
-                i.CategoryName.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
-                i.CategoryName.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+            : _categories.Where(c =>
+                c.CategoryName.Contains(_categorySearch, StringComparison.OrdinalIgnoreCase));
 
     // ── CATEGORY DIALOGS ─────────────────────────────────────────────
 
@@ -346,6 +346,9 @@
             MaxWidth = MaxWidth.Small,
             FullWidth = true
         };
-        await DialogService.ShowAsync<MenuItemPreviewDialog>("", parameters, options);
+        var dialog = await DialogService.ShowAsync<MenuItemPreviewDialog>("", parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await OpenEditMenuItemDialog(item);
     }
 }
