@@ -1,9 +1,251 @@
-﻿@page "/kitchen"
+@page "/kitchen"
+@using TableFlow.Web.Services
+@layout MainLayout
 @attribute [Authorize(Roles = "Kitchen")]
+@inject OrderApiService OrderApiService
+@inject ISnackbar Snackbar
+@implements IAsyncDisposable
 
-<PageTitle>Kitchen — TableFlow</PageTitle>
+<PageTitle>Kitchen Queue - TableFlow</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-2">Kitchen</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary">
-    View and update incoming orders here.
-</MudText>
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-6">
+    <MudGrid Alignment="GridAlignment.Center" Class="mb-6">
+        <MudItem xs="12" sm="6">
+            <MudText Typo="Typo.h4" Style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; color: #1E293B;">
+                Kitchen Queue
+            </MudText>
+            @if (!_isLoading)
+            {
+                <MudText Typo="Typo.body1" Style="font-family: 'DM Sans', sans-serif; color: #64748B;">
+                    @_orders.Count active @(_orders.Count == 1 ? "order" : "orders")
+                </MudText>
+            }
+        </MudItem>
+    </MudGrid>
+
+    @if (_isLoading)
+    {
+        <MudGrid>
+            @for (int i = 0; i < 3; i++)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudPaper Outlined="true" Class="pa-4" Style="border-radius: 8px; border-color: #E2E8F0; background-color: #FFFFFF;">
+                        <MudSkeleton Width="60%" Height="30px" Class="mb-2" />
+                        <MudSkeleton Width="40%" Height="20px" Class="mb-4" />
+                        <MudSkeleton Width="100%" Height="80px" Class="mb-4" />
+                        <MudSkeleton Width="100%" Height="40px" />
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+    else if (_orders.Count == 0)
+    {
+        <MudPaper Outlined="true" Class="d-flex flex-column align-center justify-center pa-12 text-center"
+                  Style="border-radius: 8px; border-color: #E2E8F0; background-color: #FFFFFF; min-height: 300px;">
+            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" Class="mb-4" />
+            <MudText Typo="Typo.h6" Style="font-family: 'Plus Jakarta Sans', sans-serif; color: #1E293B; font-weight: 600;">
+                No active orders right now
+            </MudText>
+            <MudText Typo="Typo.body2" Style="font-family: 'DM Sans', sans-serif; color: #64748B;">
+                Everything is caught up! New orders will appear automatically.
+            </MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var order in _orders)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudPaper Outlined="true" Class="pa-4 d-flex flex-column justify-space-between"
+                              Style="border-radius: 8px; border-color: #E2E8F0; background-color: #FFFFFF; min-height: 280px; height: 100%;">
+
+                        <div>
+                            <div class="d-flex justify-space-between align-start mb-2">
+                                <div>
+                                    <MudText Typo="Typo.subtitle1" Style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; color: #1E293B;">
+                                        @order.OrderNumber
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Style="font-family: 'DM Sans', sans-serif; color: #64748B;">
+                                        Session #@order.SessionId · @GetRelativeTime(order.CreatedAt)
+                                    </MudText>
+                                </div>
+                                <MudChip T="string" Color="GetStatusColor(order.OrderStatus)" Size="Size.Small" Variant="Variant.Filled">
+                                    @order.OrderStatus
+                                </MudChip>
+                            </div>
+
+                            <MudDivider Class="my-3" Style="background-color: #F1F5F9;" />
+
+                            <div class="mb-4">
+                                @foreach (var item in order.Items)
+                                {
+                                    <div class="d-flex align-start mb-2">
+                                        <MudText Typo="Typo.body2" Style="font-family: 'DM Sans', sans-serif; font-weight: 700; color: #1E293B; min-width: 28px;">
+                                            @item.Quantity ×
+                                        </MudText>
+                                        <div class="flex-grow-1">
+                                            <MudText Typo="Typo.body2" Style="font-family: 'DM Sans', sans-serif; color: #1E293B; font-weight: 500;">
+                                                @item.ItemName
+                                                @if (!string.IsNullOrEmpty(item.VarientName))
+                                                {
+                                                    <span style="color: #64748B; font-size: 0.85rem;"> (@item.VarientName)</span>
+                                                }
+                                            </MudText>
+                                            @if (!string.IsNullOrEmpty(item.Note))
+                                            {
+                                                <MudText Typo="Typo.caption" Style="font-family: 'DM Sans', sans-serif; color: #EF4444; font-style: italic;">
+                                                    Note: @item.Note
+                                                </MudText>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(order.Note))
+                            {
+                                <MudPaper Elevation="0" Class="pa-2 mb-4" Style="background-color: #FFFBEB; border-left: 4px solid #F59E0B; border-radius: 4px;">
+                                    <MudText Typo="Typo.caption" Style="font-family: 'DM Sans', sans-serif; color: #B45309; font-weight: 500; display: block;">
+                                        Order Note: @order.Note
+                                    </MudText>
+                                </MudPaper>
+                            }
+                        </div>
+
+                        <div class="mt-auto pt-2">
+                            @if (order.OrderStatus == "Ready")
+                            {
+                                <MudPaper Elevation="0" Class="d-flex align-center justify-center pa-2"
+                                          Style="background-color: #F0FDF4; border-radius: 8px;">
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircleOutline" Color="Color.Success" Size="Size.Small" Class="mr-2" />
+                                    <MudText Typo="Typo.body2" Style="font-family: 'DM Sans', sans-serif; color: #16A34A; font-weight: 600;">
+                                        Ready — waiting for cashier
+                                    </MudText>
+                                </MudPaper>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                           Color="GetActionColor(order.OrderStatus)"
+                                           FullWidth="true"
+                                           DropShadow="false"
+                                           OnClick="() => HandleStatusUpdateAsync(order)"
+                                           Style="font-family: 'DM Sans', sans-serif; font-weight: 600; border-radius: 8px; text-transform: none;">
+                                    @GetActionLabel(order.OrderStatus)
+                                </MudButton>
+                            }
+                        </div>
+
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private List<OrderModel> _orders = new();
+    private bool _isLoading = true;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrdersAsync();
+        _isLoading = false;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _timer = new System.Threading.Timer(async _ =>
+            {
+                await LoadOrdersAsync();
+                await InvokeAsync(StateHasChanged);
+            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+        }
+    }
+
+    private async Task LoadOrdersAsync()
+    {
+        try
+        {
+            var result = await OrderApiService.GetKitchenOrdersAsync();
+            if (result != null)
+            {
+                _orders = result;
+            }
+        }
+        catch (Exception)
+        {
+            // Fail silently on automatic background polling to not disrupt user view
+            if (_isLoading)
+            {
+                Snackbar.Add("Failed to load kitchen orders.", MudBlazor.Severity.Error);
+            }
+        }
+    }
+
+    private async Task HandleStatusUpdateAsync(OrderModel order)
+    {
+        string nextStatus = GetNextStatus(order.OrderStatus);
+
+        bool success = await OrderApiService.UpdateOrderStatusAsync(order.Id, nextStatus);
+        if (success)
+        {
+            Snackbar.Add($"Order {order.OrderNumber} updated to {nextStatus}.", MudBlazor.Severity.Success);
+            await LoadOrdersAsync();
+        }
+        else
+        {
+            Snackbar.Add($"Failed to update order {order.OrderNumber}.", MudBlazor.Severity.Error);
+        }
+    }
+
+    private static string GetNextStatus(string current) => current switch
+    {
+        "Pending" => "Preparing",
+        "Preparing" => "Ready",
+        _ => current
+    };
+
+    private static string GetActionLabel(string current) => current switch
+    {
+        "Pending" => "Start Preparing",
+        "Preparing" => "Mark Ready",
+        _ => ""
+    };
+
+    private static Color GetStatusColor(string current) => current switch
+    {
+        "Pending" => Color.Warning,
+        "Preparing" => Color.Info,
+        "Ready" => Color.Success,
+        _ => Color.Default
+    };
+
+    private static Color GetActionColor(string current) => current switch
+    {
+        "Pending" => Color.Primary,
+        "Preparing" => Color.Success,
+        _ => Color.Default
+    };
+
+    private string GetRelativeTime(DateTime createdAt)
+    {
+        var span = DateTime.Now - createdAt;
+        if (span.TotalMinutes < 1) return "Just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes} mins ago";
+        return createdAt.ToString("hh:mm tt");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_timer is not null)
+        {
+            await _timer.DisposeAsync();
+        }
+    }
+}

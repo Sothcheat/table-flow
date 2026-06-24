@@ -38,6 +38,7 @@
     public record OrderResponse(
         int Id,
         int SessionId,
+        int TableNumber, //i add new field to response to show table number in order list
         string OrderNumber,
         string OrderStatus,
         DateTime CreatedAt,
