@@ -1,66 +1,169 @@
-﻿@page "/admin"
+@page "/admin"
 @attribute [Authorize(Roles = "Admin")]
 @using Microsoft.AspNetCore.Authorization
+@using TableFlow.Web.Services
 @inject NavigationManager Navigation
+@inject SessionApiService SessionApiService
 
 <PageTitle>Admin — TableFlow</PageTitle>
 
-<MudText Typo="Typo.h2" Class="mb-6" Style="font-weight:bold">Admin Dashboard</MudText>
+@* ── HEADER ───────────────────────────────────────────────────── *@
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-6">
+    <div>
+        <MudText Typo="Typo.h2" Class="mb-2" Style="font-weight:700;">Admin Dashboard</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@DateTime.Now.ToString("dddd, MMMM d, yyyy")</MudText>
+    </div>
+</MudStack>
 
-<MudGrid Spacing="4">
+@* ── STATS ────────────────────────────────────────────────────── *@
+@if (_statsLoading)
+{
+    <MudGrid Class="mb-6" Spacing="3">
+        @for (int i = 0; i < 3; i++)
+        {
+            <MudItem xs="12" sm="4">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="88px" Class="rounded" />
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_stats is not null)
+{
+    <MudGrid Class="mb-4" Spacing="3">
+        @* Revenue *@
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); border-left:4px solid #0D6B63;">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="pa-4" Spacing="0">
+                    <div style="width:46px;height:46px;border-radius:10px;background:rgba(13,107,99,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:14px;">
+                        <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Style="color:#0D6B63;" />
+                    </div>
+                    <div>
+                        <MudText Typo="Typo.h4" Style="font-weight:700;line-height:1.15;">$@_stats.TodayRevenue.ToString("0.00")</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Today's Revenue</MudText>
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
 
-    <MudItem xs="12" sm="6" md="4">
-        <MudPaper Elevation="2"
-                  Class="pa-6 d-flex flex-column align-center justify-center"
-                  Style="cursor:pointer; min-height:140px;"
-                  @onclick="@(() => Navigation.NavigateTo("/admin/users"))">
-            <MudIcon Icon="@Icons.Material.Filled.People"
-                     Color="Color.Primary"
-                     Size="Size.Large"
-                     Class="mb-2" />
-            <MudText Typo="Typo.h4" Style="font-weight:600;" Class="mb-1">
-                Staff Management
-            </MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
-                Manage cashier and kitchen accounts
-            </MudText>
+        @* Sessions closed *@
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); border-left:4px solid #F59E0B;">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="pa-4" Spacing="0">
+                    <div style="width:46px;height:46px;border-radius:10px;background:rgba(245,158,11,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:14px;">
+                        <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Style="color:#F59E0B;" />
+                    </div>
+                    <div>
+                        <MudText Typo="Typo.h4" Style="font-weight:700;line-height:1.15;">@_stats.TodayClosedSessions</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Sessions Closed Today</MudText>
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        @* Open tables *@
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); border-left:4px solid #22C55E;">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="pa-4" Spacing="0">
+                    <div style="width:46px;height:46px;border-radius:10px;background:rgba(34,197,94,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:14px;">
+                        <MudIcon Icon="@Icons.Material.Filled.TableRestaurant" Style="color:#22C55E;" />
+                    </div>
+                    <div>
+                        <MudText Typo="Typo.h4" Style="font-weight:700;line-height:1.15;">@_stats.OpenSessions</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Tables Open Right Now</MudText>
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* ── TOP ITEMS ─────────────────────────────────────────────── *@
+    @if (_stats.TopItems.Count > 0)
+    {
+        var maxQty = _stats.TopItems.Max(i => i.TotalQuantity);
+
+        <MudPaper Elevation="0" Style="border-radius:12px; border:1px solid rgba(0,0,0,0.09);" Class="pa-5 mb-6">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Spacing="0">
+                <div style="width:38px;height:38px;border-radius:9px;background:rgba(13,107,99,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:12px;">
+                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Style="color:#0D6B63;" Size="Size.Small" />
+                </div>
+                <MudText Typo="Typo.h5" Style="font-weight:700; color:#1E293B;">Top Selling Items</MudText>
+            </MudStack>
+
+            @foreach (var (item, index) in _stats.TopItems.Select((x, i) => (x, i)))
+            {
+                var pct = maxQty > 0 ? (double)item.TotalQuantity / maxQty * 100 : 0;
+                var badgeBg    = index == 0 ? "#F59E0B" : index == 1 ? "#94A3B8" : index == 2 ? "#B45309" : "#F1F5F9";
+                var badgeColor = index < 3 ? "white" : "#64748B";
+                var barColor   = index == 0 ? "#F59E0B" : index == 1 ? "#94A3B8" : index == 2 ? "#B45309" : "#0D6B63";
+                var isLast     = index == _stats.TopItems.Count - 1;
+
+                <div style="padding:12px 0; border-bottom:@(isLast ? "none" : "1px solid rgba(0,0,0,0.06)");">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+                        <div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+                                    background:@badgeBg; color:@badgeColor; font-size:0.78rem; font-weight:700;">
+                            @(index + 1)
+                        </div>
+                        <span style="flex:1; font-size:0.9375rem; font-weight:500; color:#1E293B;">@item.ItemName</span>
+                        <div style="background:rgba(13,107,99,0.1); border-radius:20px; padding:3px 12px; flex-shrink:0;">
+                            <span style="font-size:0.8rem; font-weight:700; color:#0D6B63;">×@item.TotalQuantity</span>
+                        </div>
+                    </div>
+                    <div style="margin-left:42px; height:5px; background:#F1F5F9; border-radius:99px; overflow:hidden;">
+                        <div style="height:100%; width:@(pct.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture))%; background:@barColor; border-radius:99px;">
+                        </div>
+                    </div>
+                </div>
+            }
         </MudPaper>
-    </MudItem>
+    }
+}
 
-    <MudItem xs="12" sm="6" md="4">
-        <MudPaper Elevation="2"
-                  Class="pa-6 d-flex flex-column align-center justify-center"
-                  Style="cursor:pointer; min-height:140px;"
-                  @onclick="@(() => Navigation.NavigateTo("/admin/menu"))">
-            <MudIcon Icon="@Icons.Material.Filled.RestaurantMenu"
-                     Color="Color.Primary"
-                     Size="Size.Large"
-                     Class="mb-2" />
-            <MudText Typo="Typo.h4" Style="font-weight:600;" Class="mb-1">
-                Menu Management
-            </MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
-                Manage categories and menu items
-            </MudText>
-        </MudPaper>
-    </MudItem>
-
-    <MudItem xs="12" sm="6" md="4">
-        <MudPaper Elevation="2"
-                  Class="pa-6 d-flex flex-column align-center justify-center"
-                  Style="cursor:pointer; min-height:140px;"
-                  @onclick="@(() => Navigation.NavigateTo("/admin/tables"))">
-            <MudIcon Icon="@Icons.Material.Filled.TableRestaurant"
-                     Color="Color.Primary"
-                     Size="Size.Large"
-                     Class="mb-2" />
-            <MudText Typo="Typo.h4" Style="font-weight:600;" Class="mb-1">
-                Table Management
-            </MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
-                Manage restaurant tables
-            </MudText>
-        </MudPaper>
-    </MudItem>
-
+@* ── MANAGEMENT NAV ───────────────────────────────────────────── *@
+<MudText Typo="Typo.h4" Color="Color.Secondary" Style="letter-spacing:0.1em; font-weight:600;" Class="mb-3">Management</MudText>
+<MudGrid Spacing="3">
+    @foreach (var card in _navCards)
+    {
+        <MudItem xs="12" sm="6">
+            <MudPaper Elevation="0"
+                      Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); cursor:pointer; transition: box-shadow 0.2s, border-color 0.2s;"
+                      Class="admin-nav-card"
+                      @onclick="@card.Navigate">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="pa-4" Spacing="0">
+                    <div style="width:42px;height:42px;border-radius:8px;background:rgba(13,107,99,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:14px;">
+                        <MudIcon Icon="@card.Icon" Style="color:#0D6B63;" Size="Size.Small" />
+                    </div>
+                    <MudStack Spacing="0" Style="flex:1;">
+                        <MudText Typo="Typo.body1" Style="font-weight:600;">@card.Title</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@card.Subtitle</MudText>
+                    </MudStack>
+                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Secondary" />
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    }
 </MudGrid>
+
+@code {
+    private SessionStatsModel? _stats;
+    private bool _statsLoading = true;
+
+    private record NavCard(string Icon, string Title, string Subtitle, Action Navigate);
+    private List<NavCard> _navCards = [];
+
+    protected override void OnInitialized()
+    {
+        _navCards =
+        [
+            new(Icons.Material.Filled.ReceiptLong,  "Session History",   "View sessions, orders & revenue",    () => Navigation.NavigateTo("/admin/sessions")),
+            new(Icons.Material.Filled.People,        "Staff Management",  "Manage cashier & kitchen accounts",  () => Navigation.NavigateTo("/admin/users")),
+            new(Icons.Material.Filled.RestaurantMenu,"Menu Management",   "Manage categories & menu items",     () => Navigation.NavigateTo("/admin/menu")),
+            new(Icons.Material.Filled.TableRestaurant,"Table Management", "Configure restaurant tables",        () => Navigation.NavigateTo("/admin/tables")),
+        ];
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _stats = await SessionApiService.GetSessionStatsAsync();
+        _statsLoading = false;
+    }
+}

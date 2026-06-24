@@ -11,22 +11,22 @@
 
 <PageTitle>Login — TableFlow</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small"
-              Class="d-flex align-center justify-center"
-              Style="min-height:100vh">
-    <MudPaper Elevation="3"
-              Class="pa-8 rounded-lg"
-              Style="width:100%;max-width:420px">
+<MudPaper Elevation="4"
+          Class="pa-8 rounded-lg"
+          Style="width:100%;max-width:420px">
 
         @* Brand *@
-        <MudText Typo="Typo.h1" Color="Color.Primary"
-                 Align="Align.Center" Class="mb-2">
-            <b>TableFlow</b>
-        </MudText>
-        <MudText Typo="Typo.h4" Align="Align.Center"
-                 Class="mb-10" Color="Color.Secondary">
-            Restaurant Management System
-        </MudText>
+        <div style="display:flex; flex-direction:column; align-items:center; margin-bottom:32px;">
+            <div style="width:64px; height:64px; border-radius:16px; background:rgba(13,107,99,0.1); display:flex; align-items:center; justify-content:center; margin-bottom:16px;">
+                <MudIcon Icon="@Icons.Material.Filled.Restaurant" Style="font-size:2rem; color:#0D6B63;" />
+            </div>
+            <MudText Typo="Typo.h2" Color="Color.Primary" Align="Align.Center" Style="font-weight:700; letter-spacing:0.04em;">
+                TableFlow
+            </MudText>
+            <MudText Typo="Typo.body2" Align="Align.Center" Style="color:#64748B; margin-top:4px;">
+                Restaurant Management System
+            </MudText>
+        </div>
 
         @* Server-level error (wrong password, DB error) *@
         @if (!string.IsNullOrEmpty(_errorMessage))
@@ -87,7 +87,6 @@
         </EditForm>
 
     </MudPaper>
-</MudContainer>
 
 @code {
     private LoginModel _model = new();
@@ -97,41 +96,11 @@
 
     private async Task HandleLoginAsync()
     {
-        // FluentValidation already passed at this point
-        // OnValidSubmit only fires when all rules pass
         _errorMessage = string.Empty;
         _isLoading = true;
 
         try
         {
-            var user = await UserManager.FindByEmailAsync(_model.Email.Trim());
-            // if (user is null)
-            // {
-            //     _errorMessage = "Invalid email or password.";
-            //     return;
-            // }
-
-            // var result = await SignInManager.CheckPasswordSignInAsync(
-            //     user, _model.Password, lockoutOnFailure: false);
-
-            // if (!result.Succeeded)
-            // {
-            //     _errorMessage = "Invalid email or password.";
-            //     return;
-            // }
-            if (user is null)
-            {
-                _errorMessage = $"No user found with email: {_model.Email.Trim()}";
-                return;
-            }
-
-            var passwordValid = await UserManager.CheckPasswordAsync(user, _model.Password);
-            if (!passwordValid)
-            {
-                _errorMessage = "Invalid email or password.";
-                return;
-            }
-
             var httpClient = HttpClientFactory.CreateClient("TableFlowApi");
             var loginResponse = await httpClient.PostAsJsonAsync("/api/auth/login", new
             {
@@ -141,17 +110,18 @@
 
             if (!loginResponse.IsSuccessStatusCode)
             {
-                _errorMessage = $"Login failed. Please try again. Status: {(int)loginResponse.StatusCode} - {loginResponse.ReasonPhrase}";
+                _errorMessage = "Invalid email or password.";
                 return;
             }
 
             var data = await loginResponse.Content.ReadFromJsonAsync<LoginResponseModel>();
 
+            var user = await UserManager.FindByEmailAsync(_model.Email.Trim());
             var provider = AuthStateProvider as CustomAuthStateProvider;
-            if (provider is not null)
+            if (provider is not null && user is not null)
                 await provider.LoginAsync(user.Id, data!.Token);
 
-            var roles = await UserManager.GetRolesAsync(user);
+            var roles = await UserManager.GetRolesAsync(user!);
 
             if (roles.Contains("Admin"))
                 Navigation.NavigateTo("/admin", forceLoad: true);

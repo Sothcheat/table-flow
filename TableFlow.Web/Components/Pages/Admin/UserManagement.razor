@@ -1,4 +1,4 @@
-﻿@page "/admin/users"
+@page "/admin/users"
 @attribute [Authorize(Roles = "Admin")]
 @inject UserApiService UserApi
 @inject IDialogService DialogService
@@ -16,52 +16,72 @@
            OnClick="@(() => Navigation.NavigateTo("/admin"))">
     Back to Dashboard
 </MudButton>
-<MudText Typo="Typo.h2" Class="mb-6" Style="font-weight:bold">Staff Management</MudText>
+<MudText Typo="Typo.h2" Class="mb-1" Style="font-weight:700;">Staff Management</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    @_users.Count staff member@(_users.Count == 1 ? "" : "s")
+</MudText>
 
-<MudPaper Elevation="2" Class="pa-4">
+@* Toolbar *@
+<MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+    <MudTextField @bind-Value="_search"
+                  Immediate="true"
+                  Placeholder="Search by name, email or role…"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Clearable="true"
+                  Style="flex:1;" />
+    <MudButton Color="Color.Primary"
+               Variant="Variant.Filled"
+               StartIcon="@Icons.Material.Filled.PersonAdd"
+               OnClick="OpenAddDialog">
+        Add Staff
+    </MudButton>
+</MudStack>
 
-    @* Toolbar *@
-    <MudStack Row="true"
-              AlignItems="AlignItems.Center"
-              Justify="Justify.SpaceBetween"
-              Class="mb-4">
-        <MudText Typo="Typo.h3" Style="font-weight:bold" Color="Color.Secondary">All Staff: @_users.Count()</MudText>
-        <MudButton Color="Color.Primary"
-                   Variant="Variant.Filled"
-                   Size="Size.Medium"
-                   StartIcon="@Icons.Material.Filled.PersonAdd"
-                   OnClick="OpenAddDialog">
-            Add Staff
-        </MudButton>
+@* Table *@
+@if (_loading)
+{
+    <MudStack Spacing="3">
+        @for (int i = 0; i < 4; i++)
+        {
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="52px" Class="rounded" />
+        }
     </MudStack>
-
-    @* Table *@
-    @if (_loading)
+}
+else if (_users.Count == 0)
+{
+    <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09);" Class="pa-10 d-flex flex-column align-center">
+        <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Secondary" Size="Size.Large" Class="mb-2" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary">No staff accounts yet. Click Add Staff to create one.</MudText>
+    </MudPaper>
+}
+else
+{
+    @if (_filteredUsers.Count() == 0)
     {
-        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
-    }
-    else if (_users.Count == 0)
-    {
-        <MudAlert Severity="MudBlazor.Severity.Info">
-            No staff accounts yet. Click Add Staff to create one.
-        </MudAlert>
+        <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09);" Class="pa-10 d-flex flex-column align-center">
+            <MudIcon Icon="@Icons.Material.Filled.SearchOff" Color="Color.Secondary" Size="Size.Large" Class="mb-2" />
+            <MudText Typo="Typo.body1" Color="Color.Secondary">No staff match your search.</MudText>
+        </MudPaper>
     }
     else
     {
-        <MudTable Items="_users" Hover="true" Striped="true" Elevation="0">
+        <MudTable Items="_filteredUsers" Hover="true" Striped="true" Elevation="0"
+                  Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); overflow:hidden;">
             <HeaderContent>
-                <MudTh>Name</MudTh>
-                <MudTh>Email</MudTh>
-                <MudTh Style="text-align:center">Role</MudTh>
-                <MudTh Style="text-align:center">Actions</MudTh>
+                <MudTh Style="font-weight:600;">Name</MudTh>
+                <MudTh Style="font-weight:600;">Email</MudTh>
+                <MudTh Style="text-align:center; font-weight:600;">Role</MudTh>
+                <MudTh Style="text-align:center; font-weight:600;">Actions</MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Name">@context.FullName</MudTd>
-                <MudTd DataLabel="Email">@context.Email</MudTd>
+                <MudTd DataLabel="Email" Style="color:#475569;">@context.Email</MudTd>
                 <MudTd DataLabel="Role" Style="text-align:center">
                     <MudChip T="string"
-                             Color="@(context.Role == "Cashier"
-                                                              ? Color.Primary : Color.Secondary)"
+                             Color="@(context.Role == "Cashier" ? Color.Primary : Color.Secondary)"
                              Size="Size.Small">
                         @context.Role
                     </MudChip>
@@ -79,12 +99,20 @@
             </RowTemplate>
         </MudTable>
     }
-
-</MudPaper>
+}
 
 @code {
     private List<StaffUserModel> _users = new();
     private bool _loading = true;
+    private string _search = string.Empty;
+
+    private IEnumerable<StaffUserModel> _filteredUsers =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _users
+            : _users.Where(u =>
+                u.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                u.Email.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                u.Role.Contains(_search, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
@@ -124,8 +152,7 @@
             FullWidth = true
         };
 
-        var dialog = await DialogService.ShowAsync<UserFormDialog>(
-            "Add Staff", parameters, options);
+        var dialog = await DialogService.ShowAsync<UserFormDialog>("Add Staff", parameters, options);
         var result = await dialog.Result;
 
         if (result is { Canceled: false, Data: UserFormModel formData })
@@ -173,8 +200,7 @@
             FullWidth = true
         };
 
-        var dialog = await DialogService.ShowAsync<UserFormDialog>(
-            "Edit Staff", parameters, options);
+        var dialog = await DialogService.ShowAsync<UserFormDialog>("Edit Staff", parameters, options);
         var result = await dialog.Result;
 
         if (result is { Canceled: false, Data: UserFormModel formData })

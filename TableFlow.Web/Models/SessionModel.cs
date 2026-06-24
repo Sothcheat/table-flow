@@ -1,4 +1,12 @@
-﻿public class SessionModel
+﻿namespace TableFlow.Web.Models;
+
+public class CashierStatsModel
+{
+    public decimal TodayRevenue { get; set; }
+    public int TodayClosedSessions { get; set; }
+}
+
+public class SessionModel
 {
     public int Id { get; set; }
     public int TableId { get; set; }

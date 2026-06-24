@@ -1,0 +1,167 @@
+@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+@inject OrderApiService OrderApiService
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+<MudDialog>
+    <TitleContent>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Style="color:#0D6B63;" />
+            <MudText Typo="Typo.h6" Style="font-weight:700;">Table @TableNumber — Orders</MudText>
+            @if (_refreshing)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Style="color:#0D6B63;" />
+            }
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudStack Spacing="3">
+                @for (int i = 0; i < 3; i++)
+                {
+                    <MudPaper Elevation="0" Style="border-radius:12px; border:1px solid rgba(0,0,0,0.08); overflow:hidden;">
+                        <div style="padding:10px 14px; background:#F8FAFC;">
+                            <MudSkeleton Width="60%" Height="18px" />
+                        </div>
+                        <div style="padding:8px 14px;">
+                            <MudSkeleton Width="100%" Height="44px" Class="mb-2" />
+                            <MudSkeleton Width="100%" Height="44px" />
+                        </div>
+                    </MudPaper>
+                }
+            </MudStack>
+        }
+        else if (_orders.Count == 0)
+        {
+            <div style="text-align:center; padding:40px 0;">
+                <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Style="font-size:3.5rem; color:#CBD5E1;" Class="mb-3" />
+                <MudText Typo="Typo.body1" Style="color:#64748B; font-weight:500;">No orders for this table yet.</MudText>
+            </div>
+        }
+        else
+        {
+            @foreach (var order in _orders)
+            {
+                <MudPaper Elevation="0" Class="mb-4"
+                          Style="border-radius:12px; border:1px solid rgba(0,0,0,0.08); overflow:hidden;">
+                    <div style="padding:10px 16px; background:#F8FAFC; display:flex; justify-content:space-between; align-items:center;">
+                        <MudText Typo="Typo.body1" Style="font-weight:700; color:#1E293B;">@order.OrderNumber</MudText>
+                        <MudText Typo="Typo.caption" Style="color:#64748B;">@order.CreatedAt.ToLocalTime().ToString("HH:mm")</MudText>
+                    </div>
+                    <MudDivider />
+                    <div>
+                        @foreach (var item in order.Items)
+                        {
+                            var (label, bg) = GetStatusDisplay(item.OrderItemStatus);
+                            <div style="display:flex; align-items:center; padding:10px 16px; border-bottom:1px solid rgba(0,0,0,0.04); gap:12px;">
+                                <div style="flex:1; min-width:0;">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600; color:#1E293B;">@item.ItemName</MudText>
+                                    @if (!string.IsNullOrEmpty(item.VarientName))
+                                    {
+                                        <MudText Typo="Typo.caption" Style="color:#6366F1;">@item.VarientName</MudText>
+                                    }
+                                    <MudText Typo="Typo.caption" Style="color:#64748B;">×@item.Quantity · $@item.TotalPrice.ToString("0.00")</MudText>
+                                </div>
+                                <div style="flex-shrink:0;">
+                                    @if (item.OrderItemStatus == "Done")
+                                    {
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="Color.Primary"
+                                                   Size="Size.Small"
+                                                   StartIcon="@(_markingItems.Contains(item.Id) ? null : Icons.Material.Filled.CheckCircle)"
+                                                   Disabled="_markingItems.Contains(item.Id)"
+                                                   OnClick="@(() => MarkDeliveredAsync(item))">
+                                            @if (_markingItems.Contains(item.Id))
+                                            {
+                                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                                            }
+                                            Mark Delivered
+                                        </MudButton>
+                                    }
+                                    else if (item.OrderItemStatus == "Delivered")
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                                                 Style="color:#0D6B63; font-size:1.6rem;" />
+                                    }
+                                    else
+                                    {
+                                        <span style="font-size:0.7rem; font-weight:700; background:@bg; color:white; border-radius:100px; padding:3px 10px; white-space:nowrap;">@label</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </MudPaper>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int SessionId { get; set; }
+    [Parameter] public int TableNumber { get; set; }
+
+    private List<OrderModel> _orders = [];
+    private bool _loading = true;
+    private bool _refreshing = false;
+    private System.Threading.Timer? _timer;
+    private HashSet<int> _markingItems = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrdersAsync();
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadOrdersAsync(silent: true);
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(20));
+    }
+
+    private async Task LoadOrdersAsync(bool silent = false)
+    {
+        if (!silent) _loading = true;
+        else _refreshing = true;
+        _orders = await OrderApiService.GetSessionOrdersAsync(SessionId);
+        _loading = false;
+        _refreshing = false;
+    }
+
+    private async Task MarkDeliveredAsync(OrderItemModel item)
+    {
+        _markingItems.Add(item.Id);
+        StateHasChanged();
+        var success = await OrderApiService.UpdateOrderItemStatusAsync(item.Id, "Delivered");
+        _markingItems.Remove(item.Id);
+        if (success)
+        {
+            item.OrderItemStatus = "Delivered";
+            Snackbar.Add($"{item.ItemName} marked as delivered.", MudBlazor.Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Failed to update status.", MudBlazor.Severity.Error);
+        }
+        StateHasChanged();
+    }
+
+    private static (string Label, string Color) GetStatusDisplay(string status) => status switch
+    {
+        "Waiting"     => ("Pending",     "#94A3B8"),
+        "Preparing"   => ("Preparing",   "#F59E0B"),
+        "Done"        => ("Ready",       "#3B82F6"),
+        "Delivered"   => ("Delivered",   "#0D6B63"),
+        "Unavailable" => ("Unavailable", "#EF4444"),
+        _             => (status,        "#94A3B8")
+    };
+
+    public void Dispose() => _timer?.Dispose();
+}

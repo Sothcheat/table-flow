@@ -1,0 +1,404 @@
+@page "/admin/sessions"
+@attribute [Authorize(Roles = "Admin")]
+@using TableFlow.Web.Services
+@inject SessionApiService SessionApiService
+@inject OrderApiService OrderApiService
+@inject NavigationManager Navigation
+
+<PageTitle>Session History — TableFlow</PageTitle>
+
+@* ── HEADER ───────────────────────────────────────────────────── *@
+<MudButton StartIcon="@Icons.Material.Filled.ArrowBack"
+           Variant="Variant.Text"
+           Color="Color.Primary"
+           Class="mb-4"
+           OnClick="@(() => Navigation.NavigateTo("/admin"))">
+    Back to Dashboard
+</MudButton>
+
+<MudText Typo="Typo.h2" Style="font-weight:700;" Class="mb-1">Session History</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    All sessions, orders and billing records
+</MudText>
+
+@if (_loading)
+{
+    <MudStack Spacing="3">
+        @for (int i = 0; i < 6; i++)
+        {
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="72px" Class="rounded" />
+        }
+    </MudStack>
+}
+else
+{
+    @* ── TOOLBAR ──────────────────────────────────────────────────── *@
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+        @* Filter buttons — fixed left *@
+        <MudStack Row="true" Spacing="1" Style="flex-shrink:0;">
+            @foreach (var f in _filters)
+            {
+                <MudButton Variant="@(_filter == f.Key ? Variant.Filled : Variant.Outlined)"
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           OnClick="@(() => SetFilter(f.Key))">
+                    @f.Label
+                </MudButton>
+            }
+        </MudStack>
+
+        @* Search — stretches to fill the remaining space *@
+        <MudTextField @bind-Value="_search"
+                      @bind-Value:after="ApplySearch"
+                      Immediate="true"
+                      Placeholder="Search table or cashier…"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Clearable="true"
+                      Style="flex:1;" />
+    </MudStack>
+
+    @* ── SUMMARY CARDS ────────────────────────────────────────────── *@
+    @if (_visibleSessions.Count > 0)
+    {
+        var totalRevenue   = _visibleSessions.Where(s => s.TotalAmount.HasValue).Sum(s => s.TotalAmount!.Value);
+        var openCount      = _visibleSessions.Count(s => s.SessionStatus == "Open");
+        var cashCount      = _visibleSessions.Count(s => s.PaymentMethod == "Cash");
+        var khqrCount      = _visibleSessions.Count(s => s.PaymentMethod == "KHQR");
+
+        <MudGrid Spacing="2" Class="mb-5">
+            @* Sessions *@
+            <MudItem xs="6" sm="3">
+                <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); border-top:3px solid #0D6B63;">
+                    <div style="padding:14px 16px; display:flex; align-items:center; gap:12px;">
+                        <div style="width:38px;height:38px;border-radius:8px;background:rgba(13,107,99,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Style="color:#0D6B63;" Size="Size.Small" />
+                        </div>
+                        <div>
+                            <div style="font-size:1.4rem; font-weight:700; line-height:1.2; color:#1E293B;">@_visibleSessions.Count</div>
+                            <div style="font-size:0.72rem; color:#475569; font-weight:500;">Total Sessions</div>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            @* Revenue *@
+            <MudItem xs="6" sm="3">
+                <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); border-top:3px solid #F59E0B;">
+                    <div style="padding:14px 16px; display:flex; align-items:center; gap:12px;">
+                        <div style="width:38px;height:38px;border-radius:8px;background:rgba(245,158,11,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Style="color:#F59E0B;" Size="Size.Small" />
+                        </div>
+                        <div>
+                            <div style="font-size:1.4rem; font-weight:700; line-height:1.2; color:#1E293B;">$@totalRevenue.ToString("0.00")</div>
+                            <div style="font-size:0.72rem; color:#475569; font-weight:500;">Total Revenue</div>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            @* Open sessions *@
+            <MudItem xs="6" sm="3">
+                <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); border-top:3px solid #22C55E;">
+                    <div style="padding:14px 16px; display:flex; align-items:center; gap:12px;">
+                        <div style="width:38px;height:38px;border-radius:8px;background:rgba(34,197,94,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <MudIcon Icon="@Icons.Material.Filled.TableRestaurant" Style="color:#22C55E;" Size="Size.Small" />
+                        </div>
+                        <div>
+                            <div style="font-size:1.4rem; font-weight:700; line-height:1.2; color:#1E293B;">@openCount</div>
+                            <div style="font-size:0.72rem; color:#475569; font-weight:500;">Open Right Now</div>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            @* Cash / KHQR split *@
+            <MudItem xs="6" sm="3">
+                <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); border-top:3px solid #6366F1;">
+                    <div style="padding:14px 16px; display:flex; align-items:center; gap:12px;">
+                        <div style="width:38px;height:38px;border-radius:8px;background:rgba(99,102,241,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <MudIcon Icon="@Icons.Material.Filled.Payment" Style="color:#6366F1;" Size="Size.Small" />
+                        </div>
+                        <div>
+                            <div style="font-size:1.4rem; font-weight:700; line-height:1.2; color:#1E293B;">
+                                <span style="color:#0D6B63;">@cashCount</span>
+                                <span style="color:#CBD5E1; font-weight:400; font-size:1rem;"> / </span>
+                                <span style="color:#6366F1;">@khqrCount</span>
+                            </div>
+                            <div style="font-size:0.72rem; color:#475569; font-weight:500;">Cash / KHQR</div>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+
+    @* ── SESSION LIST ─────────────────────────────────────────────── *@
+    @if (_visibleSessions.Count == 0)
+    {
+        <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09);" Class="pa-10 d-flex flex-column align-center">
+            <MudIcon Icon="@Icons.Material.Filled.SearchOff" Color="Color.Secondary" Size="Size.Large" Class="mb-2" />
+            <MudText Typo="Typo.body1" Color="Color.Secondary">No sessions match your filter.</MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudExpansionPanels MultiExpansion="true" Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); overflow:hidden;">
+            @foreach (var session in _visibleSessions)
+            {
+                <MudExpansionPanel @key="session.Id"
+                                   ExpandedChanged="@((expanded) => OnSessionExpandedAsync(session.Id, expanded))">
+                    <TitleContent>
+                        <div style="display:flex; align-items:center; gap:20px; width:100%; padding:4px 8px 4px 0;">
+
+                            @* Status strip *@
+                            <div style="width:4px; height:44px; border-radius:4px; flex-shrink:0;
+                                        background:@(session.SessionStatus == "Open" ? "#22C55E" : "#CBD5E1");">
+                            </div>
+
+                            @* Date + time *@
+                            <div style="min-width:150px; flex-shrink:0;">
+                                <div style="font-weight:700; font-size:0.9rem; color:#1E293B;">
+                                    @session.OpenedAt.ToLocalTime().ToString("MMM d, yyyy")
+                                </div>
+                                <div style="font-size:0.75rem; color:#475569; margin-top:2px;">
+                                    @session.OpenedAt.ToLocalTime().ToString("h:mm tt")
+                                    @if (session.ClosedAt.HasValue)
+                                    {
+                                        <span> – @session.ClosedAt.Value.ToLocalTime().ToString("h:mm tt")</span>
+                                        var dur = session.ClosedAt.Value - session.OpenedAt;
+                                        <span style="margin-left:5px; color:#94A3B8;">(@((int)dur.TotalMinutes)m)</span>
+                                    }
+                                </div>
+                            </div>
+
+                            @* Table + cashier *@
+                            <div style="flex:1; min-width:110px;">
+                                <div style="font-size:0.9rem; font-weight:700; color:#0D6B63;">
+                                    Table @session.TableNumber
+                                </div>
+                                <div style="font-size:0.75rem; color:#475569; margin-top:2px;">@session.CreatedByName</div>
+                            </div>
+
+                            @* Status + payment chips *@
+                            <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
+                                @if (session.SessionStatus == "Open")
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success"
+                                             Variant="Variant.Filled" Style="height:24px; font-size:0.72rem;">
+                                        Open
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default"
+                                             Variant="Variant.Filled" Style="height:24px; font-size:0.72rem;">
+                                        Closed
+                                    </MudChip>
+                                }
+
+                                @if (session.PaymentMethod == "Cash")
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary"
+                                             Variant="Variant.Outlined" Style="height:24px; font-size:0.72rem;">
+                                        Cash
+                                    </MudChip>
+                                }
+                                else if (session.PaymentMethod == "KHQR")
+                                {
+                                    <MudChip T="string" Size="Size.Small"
+                                             Variant="Variant.Outlined"
+                                             Style="height:24px; font-size:0.72rem; border-color:#6366F1; color:#6366F1;">
+                                        KHQR
+                                    </MudChip>
+                                }
+                            </div>
+
+                            @* Total *@
+                            <div style="min-width:100px; text-align:right; flex-shrink:0;">
+                                @if (session.TotalAmount.HasValue)
+                                {
+                                    <div style="font-weight:700; font-size:1.05rem; color:#0D6B63;">
+                                        $@session.TotalAmount.Value.ToString("0.00")
+                                    </div>
+                                    <div style="font-size:0.7rem; color:#94A3B8; margin-top:1px;">total</div>
+                                }
+                                else
+                                {
+                                    <div style="font-size:0.8rem; color:#94A3B8; font-style:italic;">In progress</div>
+                                }
+                            </div>
+                        </div>
+                    </TitleContent>
+
+                    <ChildContent>
+                        <MudDivider />
+                        <div style="padding:16px;">
+                            @if (_ordersLoading.Contains(session.Id))
+                            {
+                                <MudStack Spacing="2">
+                                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="32px" Class="rounded" />
+                                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="32px" Class="rounded" />
+                                </MudStack>
+                            }
+                            else if (_ordersCache.TryGetValue(session.Id, out var orders))
+                            {
+                                @if (orders.Count == 0)
+                                {
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudIcon Icon="@Icons.Material.Filled.Inbox" Color="Color.Secondary" Size="Size.Small" />
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">No orders placed in this session.</MudText>
+                                    </MudStack>
+                                }
+                                else
+                                {
+                                    <MudStack Spacing="2">
+                                        @foreach (var order in orders)
+                                        {
+                                            <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09);">
+                                                @* Order header *@
+                                                <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#F8FAFC; border-radius:8px 8px 0 0; border-bottom:1px solid rgba(0,0,0,0.07);">
+                                                    <div style="display:flex; align-items:center; gap:8px;">
+                                                        <span style="font-size:0.875rem; font-weight:700; color:#1E293B;">@order.OrderNumber</span>
+                                                        <MudChip T="string" Size="Size.Small"
+                                                                 Color="@GetOrderStatusColor(order.OrderStatus)"
+                                                                 Variant="Variant.Filled"
+                                                                 Style="font-size:0.68rem; height:20px;">
+                                                            @order.OrderStatus
+                                                        </MudChip>
+                                                    </div>
+                                                    <span style="font-size:0.75rem; color:#475569;">
+                                                        @order.CreatedAt.ToLocalTime().ToString("h:mm tt")
+                                                    </span>
+                                                </div>
+
+                                                @* Order items *@
+                                                <div style="padding:8px 14px 0;">
+                                                    @foreach (var item in order.Items)
+                                                    {
+                                                        <div style="display:flex; align-items:baseline; padding:6px 0; border-bottom:1px solid rgba(0,0,0,0.05);">
+                                                            <div style="flex:1;">
+                                                                <span style="font-size:0.875rem; color:#1E293B; font-weight:500;">@item.ItemName</span>
+                                                                @if (!string.IsNullOrEmpty(item.VarientName))
+                                                                {
+                                                                    <span style="font-size:0.75rem; color:#6366F1; margin-left:6px; font-weight:500;">@item.VarientName</span>
+                                                                }
+                                                            </div>
+                                                            <div style="font-size:0.8rem; color:#475569; width:36px; text-align:center; font-weight:600;">×@item.Quantity</div>
+                                                            <div style="font-size:0.8rem; color:#475569; width:60px; text-align:right;">$@item.UnitPrice.ToString("0.00")</div>
+                                                            <div style="font-size:0.875rem; font-weight:700; color:#0D6B63; width:68px; text-align:right;">$@item.TotalPrice.ToString("0.00")</div>
+                                                        </div>
+                                                    }
+                                                </div>
+
+                                                @* Order footer *@
+                                                <div style="display:flex; justify-content:flex-end; align-items:center; padding:8px 14px; background:#F8FAFC; border-radius:0 0 8px 8px; border-top:1px solid rgba(0,0,0,0.05); gap:8px;">
+                                                    <span style="font-size:0.78rem; color:#475569;">Order total</span>
+                                                    <span style="font-size:1rem; font-weight:700; color:#1E293B;">$@order.OrderTotal.ToString("0.00")</span>
+                                                </div>
+                                            </MudPaper>
+                                        }
+
+                                        @* Session total footer *@
+                                        @if (orders.Count > 1)
+                                        {
+                                            <div style="display:flex; justify-content:flex-end; align-items:center; gap:10px; padding:10px 4px 2px;">
+                                                <span style="font-size:0.8rem; color:#475569; font-weight:500;">Session total</span>
+                                                <span style="font-size:1.15rem; font-weight:700; color:#0D6B63;">
+                                                    $@orders.Sum(o => o.OrderTotal).ToString("0.00")
+                                                </span>
+                                            </div>
+                                        }
+                                    </MudStack>
+                                }
+                            }
+                        </div>
+                    </ChildContent>
+                </MudExpansionPanel>
+            }
+        </MudExpansionPanels>
+    }
+}
+
+@code {
+    private List<TableFlow.Web.Models.SessionModel> _sessions = [];
+    private List<TableFlow.Web.Models.SessionModel> _filteredSessions = [];
+    private List<TableFlow.Web.Models.SessionModel> _visibleSessions = [];
+    private Dictionary<int, List<OrderModel>> _ordersCache = new();
+    private HashSet<int> _ordersLoading = new();
+    private bool _loading = true;
+    private string _filter = "all";
+    private string _search = string.Empty;
+
+    private record FilterOption(string Key, string Label);
+    private readonly List<FilterOption> _filters =
+    [
+        new("today", "Today"),
+        new("week",  "This Week"),
+        new("all",   "All Time"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sessions = await SessionApiService.GetSessionHistoryAsync();
+        ApplyFilter();
+        _loading = false;
+    }
+
+    private void SetFilter(string filter)
+    {
+        _filter = filter;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        var now = DateTime.UtcNow;
+        _filteredSessions = _filter switch
+        {
+            "today" => _sessions.Where(s => s.OpenedAt.Date == now.Date).ToList(),
+            "week"  => _sessions.Where(s => s.OpenedAt >= now.AddDays(-7)).ToList(),
+            _       => _sessions
+        };
+        ApplySearch();
+    }
+
+    private void ApplySearch()
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            _visibleSessions = _filteredSessions;
+            return;
+        }
+        var q = _search.Trim().ToLower();
+        _visibleSessions = _filteredSessions
+            .Where(s => s.TableNumber.ToString().Contains(q) ||
+                        $"table {s.TableNumber}".Contains(q) ||
+                        s.CreatedByName.ToLower().Contains(q))
+            .ToList();
+    }
+
+    private async Task OnSessionExpandedAsync(int sessionId, bool expanded)
+    {
+        if (!expanded || _ordersCache.ContainsKey(sessionId)) return;
+
+        _ordersLoading.Add(sessionId);
+        StateHasChanged();
+
+        var orders = await OrderApiService.GetSessionOrdersAsync(sessionId);
+        _ordersCache[sessionId] = orders;
+        _ordersLoading.Remove(sessionId);
+        StateHasChanged();
+    }
+
+    private Color GetOrderStatusColor(string status) => status switch
+    {
+        "Pending"   => Color.Warning,
+        "Preparing" => Color.Info,
+        "Ready"     => Color.Success,
+        "Served"    => Color.Default,
+        _           => Color.Default
+    };
+}

@@ -1,4 +1,4 @@
-﻿@page "/admin/tables"
+@page "/admin/tables"
 @using TableFlow.Web.Models
 @using TableFlow.Web.Services
 @using Microsoft.AspNetCore.Authorization
@@ -18,6 +18,7 @@
     Back to Dashboard
 </MudButton>
 <MudText Typo="Typo.h2" Style="font-weight:bold" Class="mb-6">Table Management</MudText>
+
 @if (_loading)
 {
     <MudProgressLinear Indeterminate="true" Class="mb-4" />
@@ -39,7 +40,10 @@ else
         <HeaderContent>
             <MudTh>Table Number</MudTh>
             <MudTh>Status</MudTh>
-            <MudTh>Actions</MudTh>
+            @if (IsAdmin)
+            {
+                <MudTh>Actions</MudTh>
+            }
         </HeaderContent>
         <RowTemplate>
             <MudTd>Table @context.TableNumber</MudTd>
@@ -50,9 +54,9 @@ else
                     @context.Status
                 </MudChip>
             </MudTd>
-            <MudTd>
-                @if (IsAdmin)
-                {
+            @if (IsAdmin)
+            {
+                <MudTd>
                     <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                    Color="Color.Primary"
                                    Size="Size.Small"
@@ -61,17 +65,8 @@ else
                                    Color="Color.Error"
                                    Size="Size.Small"
                                    OnClick="@(() => DeleteTable(context))" />
-                }
-                @if (IsCashier)
-                {
-                    <MudButton Variant="Variant.Outlined"
-                               Size="Size.Small"
-                               Color="@(context.Status == "Available" ? Color.Error : Color.Success)"
-                               OnClick="@(() => ToggleStatus(context))">
-                        @(context.Status == "Available" ? "Mark Occupied" : "Mark Available")
-                    </MudButton>
-                }
-            </MudTd>
+                </MudTd>
+            }
         </RowTemplate>
     </MudTable>
 }
@@ -109,8 +104,11 @@ else
 
     private async Task OpenAddDialog()
     {
+        var nextNumber = _tables.Count > 0 ? _tables.Max(t => t.TableNumber) + 1 : 1;
         var parameters = new DialogParameters
         {
+            { nameof(TableFormDialog.NextTableNumber), nextNumber },
+            { nameof(TableFormDialog.ExistingTableNumbers), _tables.Select(t => t.TableNumber).ToList() },
             { nameof(TableFormDialog.OnCreate), async (int tableNumber) =>
                 await TableApiService.CreateTableAsync(tableNumber) }
         };
@@ -131,6 +129,7 @@ else
         var parameters = new DialogParameters
         {
             { nameof(TableFormDialog.ExistingTable), table },
+            { nameof(TableFormDialog.ExistingTableNumbers), _tables.Select(t => t.TableNumber).ToList() },
             { nameof(TableFormDialog.OnUpdate), async (int id, int tableNumber) =>
                 await TableApiService.UpdateTableAsync(id, tableNumber) }
         };
@@ -162,24 +161,6 @@ else
         {
             _tables = _tables.Where(t => t.Id != table.Id).ToList();
             Snackbar.Add("Table deleted.", MudBlazor.Severity.Success);
-        }
-        else
-        {
-            Snackbar.Add(error, MudBlazor.Severity.Error);
-        }
-    }
-
-    private async Task ToggleStatus(TableModel table)
-    {
-        var newStatus = table.Status == "Available" ? "Occupied" : "Available";
-        var (success, error) = await TableApiService.UpdateTableStatusAsync(table.Id, newStatus);
-
-        if (success)
-        {
-            _tables = _tables.Select(t =>
-                t.Id == table.Id ? t with { Status = newStatus } : t
-            ).ToList();
-            Snackbar.Add($"Table {table.TableNumber} marked {newStatus}.", MudBlazor.Severity.Success);
         }
         else
         {

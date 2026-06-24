@@ -1,12 +1,49 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Sections
 
 <MudThemeProvider Theme="@TableFlowTheme.Theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
+<style>
+    .client-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        z-index: 1300;
+        background: #0D6B63;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        display: flex;
+        align-items: center;
+        padding: 0 4px 0 16px;
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
+    }
+    .client-body {
+        padding-top: 64px;
+        min-height: 100vh;
+    }
+    @@media (max-width: 600px) {
+        .mud-snackbar {
+            max-width: 82vw;
+            min-width: 0;
+            font-size: 0.875rem;
+        }
+    }
+</style>
+
+@* MudLayout provides the cascade context MudDrawer needs for backdrop overlay and body-scroll lock.
+   We do NOT use MudAppBar or MudMainContent so their auto-padding doesn't interfere. *@
 <MudLayout>
-    <MudMainContent>
+    <div class="client-header">
+        <MudIcon Icon="@Icons.Material.Filled.Restaurant" Size="Size.Small" Style="color:white; margin-right:8px; flex-shrink:0;" />
+        <MudText Typo="Typo.h6" Style="font-weight:700; letter-spacing:0.05em; color:white; flex:1;">TableFlow</MudText>
+        <SectionOutlet SectionName="client-appbar-tools" />
+    <SectionOutlet SectionName="client-cart-tool" />
+    </div>
+    <div class="client-body">
         @Body
-    </MudMainContent>
+    </div>
 </MudLayout>

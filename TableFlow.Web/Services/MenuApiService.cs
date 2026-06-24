@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Components.Authorization;
+using System.Net;
 using TableFlow.Web.Auth;
 using TableFlow.Web.Models;
 
@@ -8,13 +9,16 @@ public class MenuApiService
 {
     private readonly HttpClient _http;
     private readonly CustomAuthStateProvider _authProvider;
+    private readonly UnauthorizedNotifier _notifier;
 
     public MenuApiService(
         IHttpClientFactory httpClientFactory,
-        AuthenticationStateProvider authProvider)
+        AuthenticationStateProvider authProvider,
+        UnauthorizedNotifier notifier)
     {
         _http = httpClientFactory.CreateClient("TableFlowApi");
         _authProvider = (CustomAuthStateProvider)authProvider;
+        _notifier = notifier;
     }
 
     // ── HELPERS ──────────────────────────────────────────────────────
@@ -26,12 +30,30 @@ public class MenuApiService
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
     }
 
+    private async Task<bool> CheckUnauthorizedAsync(HttpResponseMessage response)
+    {
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            await _notifier.NotifyAsync();
+            return true;
+        }
+        return false;
+    }
+
+    private async Task<T?> GetJsonAsync<T>(string url)
+    {
+        var res = await _http.GetAsync(url);
+        if (await CheckUnauthorizedAsync(res)) return default;
+        if (!res.IsSuccessStatusCode) return default;
+        return await res.Content.ReadFromJsonAsync<T>(
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    }
+
     // ── CATEGORIES ───────────────────────────────────────────────────
 
     public async Task<List<CategoryModel>> GetCategoriesAsync()
     {
-        //await AttachTokenAsync();
-        return await _http.GetFromJsonAsync<List<CategoryModel>>("/api/menu/categories")
+        return await GetJsonAsync<List<CategoryModel>>("/api/menu/categories")
                ?? new List<CategoryModel>();
     }
 
@@ -39,6 +61,7 @@ public class MenuApiService
     {
         await AttachTokenAsync();
         var res = await _http.PostAsJsonAsync("/api/menu/categories", model);
+        if (await CheckUnauthorizedAsync(res)) return null;
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<CategoryModel>();
     }
@@ -47,6 +70,7 @@ public class MenuApiService
     {
         await AttachTokenAsync();
         var res = await _http.PutAsJsonAsync($"/api/menu/categories/{id}", model);
+        if (await CheckUnauthorizedAsync(res)) return null;
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<CategoryModel>();
     }
@@ -55,6 +79,7 @@ public class MenuApiService
     {
         await AttachTokenAsync();
         var res = await _http.DeleteAsync($"/api/menu/categories/{id}");
+        if (await CheckUnauthorizedAsync(res)) return false;
         return res.IsSuccessStatusCode;
     }
 
@@ -62,15 +87,14 @@ public class MenuApiService
 
     public async Task<List<MenuItemModel>> GetMenuItemsAsync()
     {
-        //await AttachTokenAsync();
-        return await _http.GetFromJsonAsync<List<MenuItemModel>>("/api/menu/items")
+        return await GetJsonAsync<List<MenuItemModel>>("/api/menu/items")
                ?? new List<MenuItemModel>();
     }
 
     public async Task<List<MenuItemModel>> GetMenuItemsByCategoryAsync(int categoryId)
     {
         await AttachTokenAsync();
-        return await _http.GetFromJsonAsync<List<MenuItemModel>>($"/api/menu/items/by-category/{categoryId}")
+        return await GetJsonAsync<List<MenuItemModel>>($"/api/menu/items/by-category/{categoryId}")
                ?? new List<MenuItemModel>();
     }
 
@@ -78,6 +102,7 @@ public class MenuApiService
     {
         await AttachTokenAsync();
         var res = await _http.PostAsJsonAsync("/api/menu/items", model);
+        if (await CheckUnauthorizedAsync(res)) return null;
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<MenuItemModel>();
     }
@@ -86,6 +111,7 @@ public class MenuApiService
     {
         await AttachTokenAsync();
         var res = await _http.PutAsJsonAsync($"/api/menu/items/{id}", model);
+        if (await CheckUnauthorizedAsync(res)) return null;
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<MenuItemModel>();
     }
@@ -94,12 +120,13 @@ public class MenuApiService
     {
         await AttachTokenAsync();
         var res = await _http.DeleteAsync($"/api/menu/items/{id}");
+        if (await CheckUnauthorizedAsync(res)) return false;
         return res.IsSuccessStatusCode;
     }
 
     public async Task<MenuItemModel?> GetMenuItemByIdAsync(int id)
     {
-        return await _http.GetFromJsonAsync<MenuItemModel>($"/api/menu/items/{id}");
+        return await GetJsonAsync<MenuItemModel>($"/api/menu/items/{id}");
     }
 
     public async Task<bool> UpdateItemAvailabilityAsync(int id, bool isAvailable)
@@ -108,6 +135,7 @@ public class MenuApiService
         var res = await _http.PatchAsJsonAsync(
             $"/api/menu/items/{id}/availability",
             new { IsAvailable = isAvailable });
+        if (await CheckUnauthorizedAsync(res)) return false;
         return res.IsSuccessStatusCode;
     }
 
@@ -115,8 +143,7 @@ public class MenuApiService
 
     public async Task<List<VarientModel>> GetVarientsAsync(int menuItemId)
     {
-        //await AttachTokenAsync();
-        return await _http.GetFromJsonAsync<List<VarientModel>>($"/api/menu/items/{menuItemId}/varients")
+        return await GetJsonAsync<List<VarientModel>>($"/api/menu/items/{menuItemId}/varients")
                ?? new List<VarientModel>();
     }
 
@@ -124,6 +151,7 @@ public class MenuApiService
     {
         await AttachTokenAsync();
         var res = await _http.PostAsJsonAsync($"/api/menu/items/{menuItemId}/varients", model);
+        if (await CheckUnauthorizedAsync(res)) return null;
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<VarientModel>();
     }
@@ -132,6 +160,7 @@ public class MenuApiService
     {
         await AttachTokenAsync();
         var res = await _http.PutAsJsonAsync($"/api/menu/items/{menuItemId}/varients/{varientId}", model);
+        if (await CheckUnauthorizedAsync(res)) return null;
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<VarientModel>();
     }
@@ -140,6 +169,7 @@ public class MenuApiService
     {
         await AttachTokenAsync();
         var res = await _http.DeleteAsync($"/api/menu/items/{menuItemId}/varients/{varientId}");
+        if (await CheckUnauthorizedAsync(res)) return false;
         return res.IsSuccessStatusCode;
     }
 }

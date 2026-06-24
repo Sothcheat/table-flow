@@ -1,4 +1,4 @@
-﻿@using TableFlow.Web.Models
+@using TableFlow.Web.Models
 
 <MudDialog>
     <TitleContent>
@@ -15,12 +15,9 @@
                          Label="Table Number"
                          Min="1"
                          Variant="Variant.Outlined"
-                         Class="mt-2" />
-
-        @if (_errors.ContainsKey("TableNumber"))
-        {
-            <MudText Color="Color.Error" Typo="Typo.caption">@_errors["TableNumber"]</MudText>
-        }
+                         Class="mt-2"
+                         Error="@(_errors.ContainsKey("TableNumber"))"
+                         ErrorText="@(_errors.GetValueOrDefault("TableNumber"))" />
     </DialogContent>
 
     <DialogActions>
@@ -40,6 +37,8 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public TableModel? ExistingTable { get; set; }
+    [Parameter] public int NextTableNumber { get; set; } = 1;
+    [Parameter] public List<int> ExistingTableNumbers { get; set; } = new();
     [Parameter] public Func<int, Task<(bool Success, string Error)>> OnCreate { get; set; } = null!;
     [Parameter] public Func<int, int, Task<(bool Success, string Error)>> OnUpdate { get; set; } = null!;
 
@@ -50,8 +49,7 @@
 
     protected override void OnInitialized()
     {
-        if (IsEditMode)
-            _tableNumber = ExistingTable!.TableNumber;
+        _tableNumber = IsEditMode ? ExistingTable!.TableNumber : NextTableNumber;
     }
 
     private void Cancel() => MudDialog.Cancel();
@@ -63,6 +61,17 @@
         if (_tableNumber < 1)
         {
             _errors["TableNumber"] = "Table number must be at least 1.";
+            return;
+        }
+
+        // Client-side duplicate check — skip the current table's own number when editing
+        var isDuplicate = IsEditMode
+            ? ExistingTableNumbers.Any(n => n == _tableNumber && n != ExistingTable!.TableNumber)
+            : ExistingTableNumbers.Contains(_tableNumber);
+
+        if (isDuplicate)
+        {
+            _errors["TableNumber"] = $"Table {_tableNumber} already exists.";
             return;
         }
 

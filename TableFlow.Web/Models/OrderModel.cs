@@ -1,19 +1,5 @@
 ﻿namespace TableFlow.Web.Models;
 
-public class SessionModel
-{
-    public int Id { get; set; }
-    public int TableId { get; set; }
-    public int TableNumber { get; set; }
-    public string SessionStatus { get; set; } = string.Empty;
-    public string? PaymentMethod { get; set; }
-    public decimal? TotalAmount { get; set; }
-    public DateTime OpenedAt { get; set; }
-    public DateTime? ClosedAt { get; set; }
-    public string CreatedById { get; set; } = string.Empty;
-    public string CreatedByName { get; set; } = string.Empty;
-}
-
 public class OrderModel
 {
     public int Id { get; set; }
@@ -40,4 +26,18 @@ public class OrderItemModel
     public decimal TotalPrice { get; set; }
     public string OrderItemStatus { get; set; } = string.Empty;
     public string? Note { get; set; }
+}
+
+public class SessionStatsModel
+{
+    public decimal TodayRevenue { get; set; }
+    public int TodayClosedSessions { get; set; }
+    public int OpenSessions { get; set; }
+    public List<TopSellingItemModel> TopItems { get; set; } = new();
+}
+
+public class TopSellingItemModel
+{
+    public string ItemName { get; set; } = string.Empty;
+    public int TotalQuantity { get; set; }
 }

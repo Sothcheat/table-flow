@@ -103,3 +103,9 @@ h1:focus {
         padding-right: 4px !important;
     }
 }
+
+/* ── Admin nav card hover ── */
+.admin-nav-card:hover {
+    box-shadow: 0 2px 8px rgba(13,107,99,0.15) !important;
+    border-color: rgba(13,107,99,0.35) !important;
+}
