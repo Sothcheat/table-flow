@@ -21,6 +21,10 @@ public class MenuItemModel
     public int CategoryId { get; set; }
     public string CategoryName { get; set; } = string.Empty;
     public List<VarientModel> Varients { get; set; } = new();
+
+    // For items with variants, orderable if ≥1 variant is available; otherwise use item flag
+    public bool IsEffectivelyAvailable =>
+        HasVarient ? Varients.Any(v => v.IsAvailable) : IsAvailable;
 }
 
 public class VarientModel

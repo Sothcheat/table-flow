@@ -14,18 +14,61 @@ namespace TableFlow.Api.Endpoints
         {
             var sessions = app.MapGroup("/api/sessions").RequireAuthorization();
 
-            // GET all sessions — history list (Admin only)
+            // GET all sessions — paginated history list (Admin only)
             sessions.MapGet("", async (
-                [FromServices] IDbContextFactory<AppDbContext> factory) =>
+                [FromServices] IDbContextFactory<AppDbContext> factory,
+                int page = 1,
+                int pageSize = 25,
+                string filter = "all",
+                string? search = null) =>
             {
                 await using var db = await factory.CreateDbContextAsync();
-                var list = await db.TableSessions
+
+                pageSize = Math.Clamp(pageSize, 10, 50);
+                page = Math.Max(1, page);
+
+                var query = db.TableSessions
+                    .AsNoTracking()
                     .Include(s => s.Table)
                     .Include(s => s.CreatedBy)
+                    .AsQueryable();
+
+                // Time filter
+                var now = DateTime.UtcNow;
+                query = filter switch
+                {
+                    "today" => query.Where(s => s.OpenedAt >= now.Date && s.OpenedAt < now.Date.AddDays(1)),
+                    "week"  => query.Where(s => s.OpenedAt >= now.AddDays(-7)),
+                    _       => query
+                };
+
+                // Search by table number or cashier name
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var q = search.Trim().ToLower();
+                    var stripped = q.StartsWith("table ") ? q["table ".Length..].Trim() : q;
+                    var tableNum = int.TryParse(stripped, out int n) ? (int?)n : null;
+                    query = query.Where(s =>
+                        (tableNum.HasValue && s.Table.TableNumber == tableNum.Value) ||
+                        s.CreatedBy.UserName.ToLower().Contains(q));
+                }
+
+                // Aggregate stats on the full filtered set before pagination
+                var totalCount   = await query.CountAsync();
+                var totalRevenue = await query.SumAsync(s => s.TotalAmount ?? 0m);
+                var openCount    = await query.CountAsync(s => s.SessionStatus == SessionStatus.Open);
+                var cashCount    = await query.CountAsync(s => s.PaymentMethod == PaymentMethod.Cash);
+                var khqrCount    = await query.CountAsync(s => s.PaymentMethod == PaymentMethod.KHQR);
+
+                var raw = await query
                     .OrderByDescending(s => s.OpenedAt)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
                     .ToListAsync();
 
-                return Results.Ok(list.Select(s => MapToResponse(s)).ToList());
+                return Results.Ok(new SessionListResponse(
+                    raw.Select(s => MapToResponse(s)).ToList(),
+                    totalCount, totalRevenue, openCount, cashCount, khqrCount));
             }).RequireAuthorization("AdminOnly");
 
             // GET dashboard stats (Admin only)
@@ -37,10 +80,14 @@ namespace TableFlow.Api.Endpoints
                 var today = DateTime.UtcNow.Date;
                 var tomorrow = today.AddDays(1);
 
-                var todaySessions = await db.TableSessions
+                var todayRevenue = await db.TableSessions
                     .Where(s => s.SessionStatus == SessionStatus.Closed &&
                                 s.ClosedAt >= today && s.ClosedAt < tomorrow)
-                    .ToListAsync();
+                    .SumAsync(s => s.TotalAmount ?? 0m);
+
+                var todayClosedCount = await db.TableSessions
+                    .CountAsync(s => s.SessionStatus == SessionStatus.Closed &&
+                                     s.ClosedAt >= today && s.ClosedAt < tomorrow);
 
                 var openCount = await db.TableSessions
                     .CountAsync(s => s.SessionStatus == SessionStatus.Open);
@@ -64,8 +111,8 @@ namespace TableFlow.Api.Endpoints
                     .ToList();
 
                 return Results.Ok(new SessionStatsResponse(
-                    todaySessions.Sum(s => s.TotalAmount ?? 0),
-                    todaySessions.Count,
+                    todayRevenue,
+                    todayClosedCount,
                     openCount,
                     topItems));
             }).RequireAuthorization("AdminOnly");
@@ -125,16 +172,21 @@ namespace TableFlow.Api.Endpoints
                 var today = DateTime.UtcNow.Date;
                 var tomorrow = today.AddDays(1);
 
-                var todaySessions = await db.TableSessions
+                var myTodayRevenue = await db.TableSessions
                     .Where(s => s.CreatedById == cashierId &&
                                 s.SessionStatus == SessionStatus.Closed &&
                                 s.ClosedAt >= today && s.ClosedAt < tomorrow)
-                    .ToListAsync();
+                    .SumAsync(s => s.TotalAmount ?? 0m);
+
+                var myTodayCount = await db.TableSessions
+                    .CountAsync(s => s.CreatedById == cashierId &&
+                                     s.SessionStatus == SessionStatus.Closed &&
+                                     s.ClosedAt >= today && s.ClosedAt < tomorrow);
 
                 return Results.Ok(new
                 {
-                    TodayRevenue = todaySessions.Sum(s => s.TotalAmount ?? 0m),
-                    TodayClosedSessions = todaySessions.Count
+                    TodayRevenue = myTodayRevenue,
+                    TodayClosedSessions = myTodayCount
                 });
             }).RequireAuthorization("CashierOnly");
 
@@ -191,7 +243,15 @@ namespace TableFlow.Api.Endpoints
                 table.TableStatus = TableStatus.Occupied;
                 db.Tables.Update(table);
                 db.TableSessions.Add(session);
-                await db.SaveChangesAsync();
+                try
+                {
+                    await db.SaveChangesAsync();
+                }
+                catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+                {
+                    // Unique index violation — another request opened the same table concurrently
+                    return Results.Conflict("Table already has an open session.");
+                }
 
                 string? qrCodeBase64 = null;
                 try
@@ -215,7 +275,8 @@ namespace TableFlow.Api.Endpoints
             sessions.MapPatch("/{id:int}/close", async (
                 int id,
                 [FromBody] CloseSessionRequest request,
-                [FromServices] IDbContextFactory<AppDbContext> factory) =>
+                [FromServices] IDbContextFactory<AppDbContext> factory,
+                ClaimsPrincipal user) =>
             {
                 await using var db = await factory.CreateDbContextAsync();
 
@@ -230,6 +291,10 @@ namespace TableFlow.Api.Endpoints
                 if (session.SessionStatus == SessionStatus.Closed)
                     return Results.Conflict("Session is already closed.");
 
+                var cashierId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (session.CreatedById != cashierId)
+                    return Results.Forbid();
+
                 if (!Enum.TryParse<PaymentMethod>(request.PaymentMethod, ignoreCase: true, out var paymentMethod))
                     return Results.BadRequest("Invalid payment method.");
 
@@ -242,6 +307,11 @@ namespace TableFlow.Api.Endpoints
                 session.ClosedAt = DateTime.UtcNow;
                 session.PaymentMethod = paymentMethod;
                 session.TotalAmount = total;
+                session.AmountReceived = request.AmountReceived;
+
+                // Advance any Ready orders to Served — session close is the terminal event
+                foreach (var order in session.Orders.Where(o => o.OrderStatus == OrderStatus.Ready))
+                    order.OrderStatus = OrderStatus.Served;
 
                 // Mark table as available again
                 session.Table.TableStatus = TableStatus.Available;
@@ -259,6 +329,7 @@ namespace TableFlow.Api.Endpoints
             session.SessionStatus.ToString(),
             session.PaymentMethod?.ToString(),
             session.TotalAmount,
+            session.AmountReceived,
             session.OpenedAt,
             session.ClosedAt,
             session.CreatedById,

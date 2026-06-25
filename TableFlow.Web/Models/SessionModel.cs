@@ -6,6 +6,16 @@ public class CashierStatsModel
     public int TodayClosedSessions { get; set; }
 }
 
+public class SessionPagedResult
+{
+    public List<SessionModel> Items { get; set; } = new();
+    public int TotalCount { get; set; }
+    public decimal TotalRevenue { get; set; }
+    public int OpenCount { get; set; }
+    public int CashCount { get; set; }
+    public int KhqrCount { get; set; }
+}
+
 public class SessionModel
 {
     public int Id { get; set; }

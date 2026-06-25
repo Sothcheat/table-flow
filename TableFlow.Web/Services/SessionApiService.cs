@@ -104,15 +104,20 @@ public class SessionApiService
         }
     }
 
-    public async Task<List<Models.SessionModel>> GetSessionHistoryAsync()
+    public async Task<SessionPagedResult> GetSessionHistoryAsync(
+        int page = 1, int pageSize = 25, string filter = "all", string? search = null)
     {
         await AttachTokenAsync();
-        var res = await _http.GetAsync("/api/sessions");
-        if (await CheckUnauthorizedAsync(res)) return new List<Models.SessionModel>();
-        if (!res.IsSuccessStatusCode) return new List<Models.SessionModel>();
-        return await res.Content.ReadFromJsonAsync<List<Models.SessionModel>>(
+        var url = $"/api/sessions?page={page}&pageSize={pageSize}&filter={filter}";
+        if (!string.IsNullOrWhiteSpace(search))
+            url += $"&search={Uri.EscapeDataString(search)}";
+
+        var res = await _http.GetAsync(url);
+        if (await CheckUnauthorizedAsync(res)) return new SessionPagedResult();
+        if (!res.IsSuccessStatusCode) return new SessionPagedResult();
+        return await res.Content.ReadFromJsonAsync<SessionPagedResult>(
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-            ?? new List<Models.SessionModel>();
+            ?? new SessionPagedResult();
     }
 
     public async Task<CashierStatsModel?> GetMyStatsAsync()
@@ -135,10 +140,12 @@ public class SessionApiService
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
     }
 
-    public async Task<(bool Success, SessionModel? Session, string Error)> CloseSessionAsync(int sessionId, string paymentMethod)
+    public async Task<(bool Success, SessionModel? Session, string Error)> CloseSessionAsync(
+        int sessionId, string paymentMethod, decimal amountReceived)
     {
         await AttachTokenAsync();
-        var res = await _http.PatchAsJsonAsync($"/api/sessions/{sessionId}/close", new { PaymentMethod = paymentMethod });
+        var res = await _http.PatchAsJsonAsync($"/api/sessions/{sessionId}/close",
+            new { PaymentMethod = paymentMethod, AmountReceived = amountReceived });
         if (await CheckUnauthorizedAsync(res)) return (false, null, "Unauthorized");
         if (res.IsSuccessStatusCode)
         {

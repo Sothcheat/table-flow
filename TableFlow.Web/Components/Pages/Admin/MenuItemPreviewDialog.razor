@@ -45,9 +45,9 @@
                 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mt-2">
                     <MudText Typo="Typo.h2" Style="font-weight:700;">@Item.ItemName</MudText>
                     <MudChip T="string"
-                             Color="@(Item.IsAvailable ? Color.Success : Color.Default)"
+                             Color="@(Item.IsEffectivelyAvailable ? Color.Success : Color.Default)"
                              Size="Size.Small">
-                        @(Item.IsAvailable ? "Available" : "Unavailable")
+                        @(Item.IsEffectivelyAvailable ? "Available" : "Unavailable")
                     </MudChip>
                 </MudStack>
 

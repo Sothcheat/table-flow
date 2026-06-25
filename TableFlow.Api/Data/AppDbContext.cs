@@ -106,6 +106,15 @@ namespace TableFlow.Api.Data
 
             modelBuilder.Entity<TableSession>()
                 .HasIndex(ts => new { ts.TableId, ts.SessionStatus });
+
+            modelBuilder.Entity<TableSession>()
+                .HasIndex(ts => ts.ClosedAt);
+
+            modelBuilder.Entity<TableSession>()
+                .HasIndex(ts => ts.CreatedById);
+
+            modelBuilder.Entity<Order>()
+                .HasIndex(o => o.CreatedAt);
         }
     }
 }

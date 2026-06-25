@@ -94,6 +94,26 @@ public class OrderApiService
         return await res.Content.ReadFromJsonAsync<List<OrderModel>>() ?? new List<OrderModel>();
     }
 
+    // ── CASHIER ──────────────────────────────────────────────────────
+
+    public async Task<List<OrderModel>> GetReadyOrdersAsync()
+    {
+        await AttachTokenAsync();
+        var res = await _http.GetAsync("/api/orders/ready");
+        if (await CheckUnauthorizedAsync(res)) return new List<OrderModel>();
+        if (!res.IsSuccessStatusCode) return new List<OrderModel>();
+        return await res.Content.ReadFromJsonAsync<List<OrderModel>>() ?? new List<OrderModel>();
+    }
+
+    public async Task<List<OrderModel>> GetUnavailableAlertOrdersAsync()
+    {
+        await AttachTokenAsync();
+        var res = await _http.GetAsync("/api/orders/unavailable-alerts");
+        if (await CheckUnauthorizedAsync(res)) return new List<OrderModel>();
+        if (!res.IsSuccessStatusCode) return new List<OrderModel>();
+        return await res.Content.ReadFromJsonAsync<List<OrderModel>>() ?? new List<OrderModel>();
+    }
+
     // ── KITCHEN ──────────────────────────────────────────────────────
 
     public async Task<List<OrderModel>> GetKitchenOrdersAsync()
@@ -105,28 +125,23 @@ public class OrderApiService
         return await res.Content.ReadFromJsonAsync<List<OrderModel>>() ?? new List<OrderModel>();
     }
 
-    //// Same as above, but tells the caller WHY it came back empty — used by KitchenPage
-    //// so a 401/403/network failure shows an error instead of silently looking like
-    //// "no active orders". Added as a separate method so existing callers of
-    //// GetKitchenOrdersAsync() are unaffected.
-    //public async Task<(bool Success, List<OrderModel> Orders)> GetKitchenOrdersCheckedAsync()
-    //{
-    //    await AttachTokenAsync();
-    //    try
-    //    {
-    //        var res = await _http.GetAsync("/api/orders/kitchen");
-    //        if (await CheckUnauthorizedAsync(res)) return (false, new List<OrderModel>());
-    //        if (await CheckForbiddenAsync(res)) return (false, new List<OrderModel>());
-    //        if (!res.IsSuccessStatusCode) return (false, new List<OrderModel>());
-    //        var orders = await res.Content.ReadFromJsonAsync<List<OrderModel>>() ?? new List<OrderModel>();
-    //        return (true, orders);
-    //    }
-    //    catch
-    //    {
-    //        // network failure, API down, etc.
-    //        return (false, new List<OrderModel>());
-    //    }
-    //}
+    public async Task<(bool Success, List<OrderModel> Orders)> GetKitchenOrdersCheckedAsync()
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var res = await _http.GetAsync("/api/orders/kitchen");
+            if (await CheckUnauthorizedAsync(res)) return (false, new List<OrderModel>());
+            if (await CheckForbiddenAsync(res)) return (false, new List<OrderModel>());
+            if (!res.IsSuccessStatusCode) return (false, new List<OrderModel>());
+            var orders = await res.Content.ReadFromJsonAsync<List<OrderModel>>() ?? new List<OrderModel>();
+            return (true, orders);
+        }
+        catch
+        {
+            return (false, new List<OrderModel>());
+        }
+    }
 
     public async Task<bool> UpdateOrderStatusAsync(int orderId, string status)
     {
@@ -145,33 +160,29 @@ public class OrderApiService
     }
 
 
-    public async Task<List<OrderModel>> GetKitchenHistoryOrdersAsync()
-    {
-        await AttachTokenAsync();
-        var res = await _http.GetAsync("/api/orders/history");
-        if (await CheckUnauthorizedAsync(res)) return new List<OrderModel>();
-        if (!res.IsSuccessStatusCode) return new List<OrderModel>();
-        return await res.Content.ReadFromJsonAsync<List<OrderModel>>() ?? new List<OrderModel>();
-    }
-
-    // Same idea as GetKitchenOrdersCheckedAsync — tells the caller WHETHER the call
-    // actually succeeded and what status code came back, so KitchenHistoryPage can
-    // show a real error instead of an empty list looking like "no history exists".
-    public async Task<(bool Success, List<OrderModel> Orders, string? ErrorDetail)> GetKitchenHistoryOrdersCheckedAsync()
+    public async Task<(bool Success, OrderHistoryPageModel? Result, string? ErrorDetail)> GetKitchenHistoryPagedAsync(
+        DateTimeOffset? from, DateTimeOffset? to, int? tableNumber, string? search, int page, int pageSize = 50)
     {
         await AttachTokenAsync();
         try
         {
-            var res = await _http.GetAsync("/api/orders/history");
-            if (await CheckUnauthorizedAsync(res)) return (false, new List<OrderModel>(), "401 Unauthorized");
-            if (await CheckForbiddenAsync(res)) return (false, new List<OrderModel>(), "403 Forbidden");
-            if (!res.IsSuccessStatusCode) return (false, new List<OrderModel>(), $"{(int)res.StatusCode} {res.StatusCode}");
-            var orders = await res.Content.ReadFromJsonAsync<List<OrderModel>>() ?? new List<OrderModel>();
-            return (true, orders, null);
+            var qs = $"page={page}&pageSize={pageSize}";
+            if (from.HasValue) qs += $"&from={Uri.EscapeDataString(from.Value.ToString("O"))}";
+            if (to.HasValue)   qs += $"&to={Uri.EscapeDataString(to.Value.ToString("O"))}";
+            if (tableNumber.HasValue) qs += $"&tableNumber={tableNumber}";
+            if (!string.IsNullOrWhiteSpace(search)) qs += $"&search={Uri.EscapeDataString(search)}";
+
+            var res = await _http.GetAsync($"/api/orders/history?{qs}");
+            if (await CheckUnauthorizedAsync(res)) return (false, null, "401 Unauthorized");
+            if (await CheckForbiddenAsync(res))    return (false, null, "403 Forbidden");
+            if (!res.IsSuccessStatusCode)          return (false, null, $"{(int)res.StatusCode} {res.StatusCode}");
+
+            var result = await res.Content.ReadFromJsonAsync<OrderHistoryPageModel>();
+            return (true, result, null);
         }
         catch (Exception ex)
         {
-            return (false, new List<OrderModel>(), ex.Message);
+            return (false, null, ex.Message);
         }
     }
 }

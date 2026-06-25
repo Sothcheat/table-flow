@@ -1,0 +1,312 @@
+@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+@inject OrderApiService OrderApiService
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.body2" Color="Color.Secondary">
+        @if (_totalCount == 0)
+        {
+            <span>No orders found</span>
+        }
+        else
+        {
+            var first = (_page - 1) * PageSize + 1;
+            var last  = Math.Min(_page * PageSize, _totalCount);
+            <span>Showing @first–@last of @_totalCount order@(_totalCount == 1 ? "" : "s")</span>
+        }
+    </MudText>
+    <MudButton Variant="Variant.Outlined"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Refresh"
+               OnClick="LoadHistoryAsync">
+        Refresh
+    </MudButton>
+</MudStack>
+
+@* ── Filters ──────────────────────────────────────────────────────────── *@
+<MudPaper Elevation="0" Class="pa-4 mb-4" Style="border:1px solid var(--mud-palette-lines-default);">
+
+    <MudButtonGroup Variant="Variant.Outlined" Color="Color.Primary" Class="mb-3" OverrideStyles="false">
+        @foreach (var bucket in _timeBuckets)
+        {
+            <MudButton Variant="@(_selectedBucket == bucket ? Variant.Filled : Variant.Outlined)"
+                       OnClick="@(() => SelectBucketAsync(bucket))">
+                @bucket
+            </MudButton>
+        }
+    </MudButtonGroup>
+
+    <MudGrid>
+        <MudItem xs="12" sm="6">
+            <MudNumericField @bind-Value="_tableFilter"
+                             @bind-Value:after="ResetAndLoadAsync"
+                             Label="Table number"
+                             Min="0"
+                             Clearable="true"
+                             Immediate="true"
+                             DebounceInterval="400" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="_searchText"
+                          @bind-Value:after="ResetAndLoadAsync"
+                          Label="Search order #"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          DebounceInterval="400" />
+        </MudItem>
+    </MudGrid>
+
+    @if (_tableFilter is not null || !string.IsNullOrWhiteSpace(_searchText))
+    {
+        <MudButton Variant="Variant.Text" Color="Color.Secondary" Class="mt-2"
+                   OnClick="ClearFiltersAsync" StartIcon="@Icons.Material.Filled.Clear">
+            Clear filters
+        </MudButton>
+    }
+</MudPaper>
+
+@if (_loading)
+{
+    <MudPaper Elevation="0" Class="pa-4" Style="border:1px solid var(--mud-palette-lines-default);">
+        @for (int i = 0; i < 4; i++)
+        {
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="60px" Class="mb-3" />
+        }
+    </MudPaper>
+}
+else if (_sessions.Count == 0)
+{
+    <MudPaper Elevation="0" Class="pa-12 d-flex flex-column align-center justify-center"
+              Style="border:1px solid var(--mud-palette-lines-default); min-height:200px;">
+        <MudIcon Icon="@Icons.Material.Filled.History" Color="Color.Default" Style="font-size:2.5rem; opacity:0.5;" />
+        <MudText Typo="Typo.h6" Class="mt-3" Color="Color.Secondary">
+            @(HasActiveFilters ? "No orders match your filters" : "No order history yet")
+        </MudText>
+    </MudPaper>
+}
+else
+{
+    <MudStack Spacing="4">
+        @foreach (var session in _sessions)
+        {
+            <MudPaper Elevation="0" Style="border:1px solid var(--mud-palette-lines-default); overflow:hidden;">
+
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center"
+                          Class="pa-4" Style="background-color:var(--mud-palette-background);">
+                    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.TableRestaurant" Color="Color.Primary" />
+                        <MudText Typo="Typo.h6">Table @session.TableNumber</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Session #@session.SessionId</MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        @session.Orders.Count order@(session.Orders.Count == 1 ? "" : "s")
+                        &middot; first order @session.FirstOrderAt.ToLocalTime().ToString("MMM d, h:mm tt")
+                    </MudText>
+                </MudStack>
+
+                <MudDivider />
+
+                <MudTable Items="session.Orders" Hover="true" Dense="false" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>Order #</MudTh>
+                        <MudTh>Items</MudTh>
+                        <MudTh>Received</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate Context="order">
+                        <MudTd>@order.OrderNumber</MudTd>
+                        <MudTd>@GetCondensedItems(order)</MudTd>
+                        <MudTd>@order.CreatedAt.ToLocalTime().ToString("h:mm tt")</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Color="@GetStatusColor(order.OrderStatus)" Size="Size.Small">
+                                @order.OrderStatus
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@(_expandedIds.Contains(order.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                           Size="Size.Small"
+                                           OnClick="@(() => ToggleExpand(order.Id))" />
+                        </MudTd>
+                    </RowTemplate>
+                    <ChildRowContent Context="order">
+                        @if (_expandedIds.Contains(order.Id))
+                        {
+                            <MudTr>
+                                <MudTd colspan="5" Class="pa-0">
+                                    <MudPaper Elevation="0" Class="pa-4 ma-2"
+                                              Style="background-color:var(--mud-palette-background); border:1px solid var(--mud-palette-lines-default);">
+                                        <MudStack Spacing="1">
+                                            @foreach (var item in order.Items)
+                                            {
+                                                <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                                    <MudText Typo="Typo.body2">
+                                                        @item.Quantity &times; @item.ItemName@(item.VarientName is not null ? $" ({item.VarientName})" : "")
+                                                    </MudText>
+                                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@item.TotalPrice.ToString("C")</MudText>
+                                                </MudStack>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(order.Note))
+                                            {
+                                                <MudAlert Severity="MudBlazor.Severity.Info" Dense="true" Variant="Variant.Outlined" Class="mt-2">
+                                                    @order.Note
+                                                </MudAlert>
+                                            }
+                                        </MudStack>
+                                    </MudPaper>
+                                </MudTd>
+                            </MudTr>
+                        }
+                    </ChildRowContent>
+                </MudTable>
+            </MudPaper>
+        }
+    </MudStack>
+
+    @if (_totalPages > 1)
+    {
+        <div style="display:flex; justify-content:center; margin-top:24px;">
+            <MudPagination Count="_totalPages"
+                           Selected="_page"
+                           SelectedChanged="OnPageChangedAsync"
+                           ShowFirstButton="true"
+                           ShowLastButton="true" />
+        </div>
+    }
+}
+
+@code {
+    private class SessionGroup
+    {
+        public int SessionId { get; set; }
+        public int TableNumber { get; set; }
+        public DateTime FirstOrderAt { get; set; }
+        public List<OrderModel> Orders { get; set; } = new();
+    }
+
+    private const int PageSize = 50;
+
+    private List<SessionGroup> _sessions = new();
+    private bool _loading = true;
+    private readonly HashSet<int> _expandedIds = new();
+
+    private int _totalCount = 0;
+    private int _totalPages = 1;
+    private int _page = 1;
+
+    private readonly string[] _timeBuckets = { "Today", "Yesterday", "This Week", "This Month", "All Time" };
+    private string _selectedBucket = "Today";
+
+    private int? _tableFilter;
+    private string _searchText = "";
+
+    private bool HasActiveFilters =>
+        _tableFilter is not null || !string.IsNullOrWhiteSpace(_searchText) || _selectedBucket != "Today";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHistoryAsync();
+    }
+
+    public async Task LoadHistoryAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var (from, to) = GetBucketRange(_selectedBucket);
+        var (success, result, errorDetail) = await OrderApiService.GetKitchenHistoryPagedAsync(
+            from, to, _tableFilter, _searchText, _page, PageSize);
+
+        if (!success)
+        {
+            Snackbar.Add($"Couldn't load order history ({errorDetail}). Try refreshing or logging in again.", MudBlazor.Severity.Error);
+            _sessions = new();
+            _totalCount = 0;
+            _totalPages = 1;
+            _loading = false;
+            return;
+        }
+
+        _totalCount = result!.TotalCount;
+        _totalPages = result.TotalPages;
+
+        _sessions = result.Orders
+            .GroupBy(o => o.SessionId)
+            .Select(g => new SessionGroup
+            {
+                SessionId   = g.Key,
+                TableNumber = g.First().TableNumber,
+                FirstOrderAt = g.Min(o => o.CreatedAt),
+                Orders      = g.OrderBy(o => o.CreatedAt).ToList()
+            })
+            .OrderByDescending(s => s.Orders.Max(o => o.CreatedAt))
+            .ToList();
+
+        _loading = false;
+    }
+
+    private async Task SelectBucketAsync(string bucket)
+    {
+        _selectedBucket = bucket;
+        await ResetAndLoadAsync();
+    }
+
+    private async Task ResetAndLoadAsync()
+    {
+        _page = 1;
+        await LoadHistoryAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _tableFilter = null;
+        _searchText = "";
+        await ResetAndLoadAsync();
+    }
+
+    private async Task OnPageChangedAsync(int page)
+    {
+        _page = page;
+        await LoadHistoryAsync();
+    }
+
+    private static (DateTimeOffset? From, DateTimeOffset? To) GetBucketRange(string bucket)
+    {
+        var today = DateTime.Today; // local midnight
+        return bucket switch
+        {
+            "Today"      => (new DateTimeOffset(today), new DateTimeOffset(today.AddDays(1))),
+            "Yesterday"  => (new DateTimeOffset(today.AddDays(-1)), new DateTimeOffset(today)),
+            "This Week"  => (new DateTimeOffset(today.AddDays(-(int)((7 + today.DayOfWeek - DayOfWeek.Monday) % 7))), new DateTimeOffset(today.AddDays(1))),
+            "This Month" => (new DateTimeOffset(new DateTime(today.Year, today.Month, 1)), new DateTimeOffset(today.AddDays(1))),
+            "All Time"   => (null, null),
+            _            => (new DateTimeOffset(today), new DateTimeOffset(today.AddDays(1)))
+        };
+    }
+
+    private void ToggleExpand(int orderId)
+    {
+        if (!_expandedIds.Add(orderId))
+            _expandedIds.Remove(orderId);
+    }
+
+    private static string GetCondensedItems(OrderModel order)
+    {
+        if (order.Items.Count == 0) return "—";
+        var first = order.Items.Take(2).Select(i => $"{i.Quantity}× {i.ItemName}");
+        var summary = string.Join(", ", first);
+        var remaining = order.Items.Count - 2;
+        return remaining > 0 ? $"{summary} +{remaining} more" : summary;
+    }
+
+    private static Color GetStatusColor(string status) => status switch
+    {
+        "Pending"   => Color.Warning,
+        "Preparing" => Color.Info,
+        "Ready"     => Color.Success,
+        "Served"    => Color.Default,
+        _           => Color.Default
+    };
+}

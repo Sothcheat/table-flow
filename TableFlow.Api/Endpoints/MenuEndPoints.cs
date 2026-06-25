@@ -275,8 +275,10 @@ public static class MenuEndpoints
         menu.MapPost("/items/{itemId:int}/varients", async (int itemId, CreateMenuItemVarientRequest req, [FromServices] IDbContextFactory<AppDbContext> factory) =>
         {
             await using var db = await factory.CreateDbContextAsync();
-            var exists = await db.MenuItems.AnyAsync(i => i.Id == itemId);
-            if (!exists) return Results.NotFound();
+            var menuItem = await db.MenuItems
+                .Include(m => m.MenuItemVarients)
+                .FirstOrDefaultAsync(m => m.Id == itemId);
+            if (menuItem is null) return Results.NotFound();
 
             var varient = new MenuItemVarient
             {
@@ -286,6 +288,11 @@ public static class MenuEndpoints
                 IsAvailable = req.IsAvailable
             };
             db.MenuItemVarients.Add(varient);
+
+            // Adding an available variant makes the item available
+            if (req.IsAvailable)
+                menuItem.IsAvailable = true;
+
             await db.SaveChangesAsync();
             return Results.Created($"/api/menu/items/{itemId}/varients/{varient.Id}",
                 new MenuItemVarientResponse(varient.Id, varient.MenuItemId, varient.VarientName, varient.Price, varient.IsAvailable));
@@ -295,12 +302,18 @@ public static class MenuEndpoints
         {
             await using var db = await factory.CreateDbContextAsync();
             var varient = await db.MenuItemVarients
+                .Include(v => v.MenuItem)
+                    .ThenInclude(m => m.MenuItemVarients)
                 .FirstOrDefaultAsync(v => v.Id == varientId && v.MenuItemId == itemId);
             if (varient is null) return Results.NotFound();
 
             varient.VarientName = req.VarientName;
             varient.Price = req.Price;
             varient.IsAvailable = req.IsAvailable;
+
+            // Item is available if at least one variant is available
+            varient.MenuItem.IsAvailable = varient.MenuItem.MenuItemVarients.Any(v => v.IsAvailable);
+
             await db.SaveChangesAsync();
             return Results.Ok(new MenuItemVarientResponse(
                 varient.Id, varient.MenuItemId, varient.VarientName, varient.Price, varient.IsAvailable));
@@ -310,9 +323,16 @@ public static class MenuEndpoints
         {
             await using var db = await factory.CreateDbContextAsync();
             var varient = await db.MenuItemVarients
+                .Include(v => v.MenuItem)
+                    .ThenInclude(m => m.MenuItemVarients)
                 .FirstOrDefaultAsync(v => v.Id == varientId && v.MenuItemId == itemId);
             if (varient is null) return Results.NotFound();
             db.MenuItemVarients.Remove(varient);
+
+            // Recompute item availability from remaining variants
+            var remaining = varient.MenuItem.MenuItemVarients.Where(v => v.Id != varientId).ToList();
+            varient.MenuItem.IsAvailable = remaining.Count == 0 || remaining.Any(v => v.IsAvailable);
+
             await db.SaveChangesAsync();
             return Results.NoContent();
         });

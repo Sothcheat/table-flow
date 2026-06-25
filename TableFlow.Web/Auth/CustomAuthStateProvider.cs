@@ -11,12 +11,12 @@ namespace TableFlow.Web.Auth
 {
     public class CustomAuthStateProvider : AuthenticationStateProvider
     {
-        private readonly ProtectedLocalStorage _storage;
+        private readonly ProtectedSessionStorage _storage;
         private readonly IDbContextFactory<AppDbContext> _dbFactory;
 
         private static readonly AuthenticationState Anonymous = new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
 
-        public CustomAuthStateProvider(ProtectedLocalStorage storage, IDbContextFactory<AppDbContext> dbFactory)
+        public CustomAuthStateProvider(ProtectedSessionStorage storage, IDbContextFactory<AppDbContext> dbFactory)
         {
             _storage = storage;
             _dbFactory = dbFactory;

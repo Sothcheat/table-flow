@@ -189,7 +189,7 @@ else
                 {
                     <MudItem xs="6" sm="6" md="4" lg="3">
                         <MudCard Class="menu-card"
-                                 Style="@GetCardStyle(item.IsAvailable)"
+                                 Style="@GetCardStyle(item.IsEffectivelyAvailable)"
                                  @onclick="@(() => OnCardClick(item))">
                             <div style="width:100%; height:170px; background:#F1F5F9; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; flex-shrink:0;">
                                 @if (string.IsNullOrEmpty(item.ImageUrl) || _imageErrors.Contains(item.Id))
@@ -224,7 +224,7 @@ else
                                 </MudText>
                             </MudCardContent>
                             <MudCardActions Class="pa-2 pt-0" @onclick:stopPropagation="true">
-                                @if (!item.IsAvailable)
+                                @if (!item.IsEffectivelyAvailable)
                                 {
                                     <MudChip T="string" Color="Color.Error" Size="Size.Small" Disabled="true" Style="width:100%;">
                                         Unavailable
@@ -367,7 +367,7 @@ else
 
     private void OnCardClick(MenuItemModel item)
     {
-        if (!item.IsAvailable) return;
+        if (!item.IsEffectivelyAvailable) return;
         if (item.HasVarient)
             Navigation.NavigateTo($"/menu/item/{item.Id}?sessionId={SessionId}");
         else
