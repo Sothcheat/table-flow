@@ -1,9 +1,242 @@
-﻿@page "/kitchen"
+@page "/kitchen"
+@layout MainLayout
 @attribute [Authorize(Roles = "Kitchen")]
+@using TableFlow.Web.Models
+@using TableFlow.Web.Services
+@inject OrderApiService OrderApiService
+@inject ISnackbar Snackbar
+@implements IAsyncDisposable
 
-<PageTitle>Kitchen — TableFlow</PageTitle>
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudStack Spacing="0">
+        <MudText Typo="Typo.h4">Kitchen Queue</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            @(_orders.Count) active order@(_orders.Count == 1 ? "" : "s")
+        </MudText>
+    </MudStack>
+</MudStack>
 
-<MudText Typo="Typo.h4" Class="mb-2">Kitchen</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary">
-    View and update incoming orders here.
-</MudText>
+@if (_loading)
+{
+    <MudGrid>
+        @for (int i = 0; i < 6; i++)
+        {
+            <MudItem xs="12" sm="12" md="6" lg="4">
+                <MudPaper Elevation="0" Class="pa-5" Style="border:1px solid var(--mud-palette-lines-default);">
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Width="60%" Height="32px" />
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Width="40%" />
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="90px" Class="mt-2" />
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="44px" Class="mt-3" />
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_orders.Count == 0)
+{
+    <MudPaper Elevation="0" Class="pa-12 d-flex flex-column align-center justify-center" Style="border:1px solid var(--mud-palette-lines-default); min-height:300px;">
+        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Style="font-size:3rem;" />
+        <MudText Typo="Typo.h6" Class="mt-3" Color="Color.Secondary">No active orders right now</MudText>
+    </MudPaper>
+}
+else
+{
+    @* xs=12 sm=12 md=6 lg=4 → cards stay wide on laptop/under-24" screens, only go 3-up on bigger monitors *@
+    <MudGrid>
+        @foreach (var order in _orders)
+        {
+            <MudItem xs="12" sm="12" md="6" lg="4">
+                <MudPaper Elevation="0" Class="pa-5 d-flex flex-column" Style="border:1px solid var(--mud-palette-lines-default); height:100%;">
+
+                    @* ── Header: order number + table + session + time ───────────────── *@
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.h5">@order.OrderNumber</MudText>
+                            <MudText Typo="Typo.subtitle1" Color="Color.Secondary">Table @order.TableNumber</MudText>
+                        </MudStack>
+                        <MudChip T="string" Color="@GetStatusColor(order.OrderStatus)" Size="Size.Medium">
+                            @order.OrderStatus
+                        </MudChip>
+                    </MudStack>
+
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                        Session #@order.SessionId &middot; received @GetRelativeTime(order.CreatedAt)
+                    </MudText>
+
+                    <MudDivider Class="mb-2" />
+
+                    @* ── Item list ──────────────────────────────────────────── *@
+                    <MudStack Spacing="2" Class="flex-grow-1">
+                        @foreach (var item in order.Items)
+                        {
+                            <MudText Typo="Typo.body1">
+                                @item.Quantity &times; @item.ItemName@(item.VarientName is not null ? $" ({item.VarientName})" : "")
+                            </MudText>
+                        }
+                    </MudStack>
+
+                    @if (!string.IsNullOrWhiteSpace(order.Note))
+                    {
+                        <MudAlert Severity="MudBlazor.Severity.Info" Dense="true" Class="mt-2" Variant="Variant.Outlined">
+                            @order.Note
+                        </MudAlert>
+                    }
+
+                    @* ── Action area ─────────────────────────────────────────────────────
+                         NOTE FOR CASHIER TEAM: Kitchen's responsibility ends at "Ready".
+                         Marking an order "Served" is the CASHIER's action (done from their
+                         tablet when the order is actually delivered / session is closed),
+                         not the kitchen's. See SessionApiService.CloseSessionAsync /
+                         OrderApiService.UpdateOrderStatusAsync(orderId, "Served") on the
+                         cashier side — that is where "Served" should be triggered, not here.
+                       ──────────────────────────────────────────────────────────────────── *@
+                    @if (order.OrderStatus == "Ready")
+                    {
+                        <MudAlert Severity="MudBlazor.Severity.Success" Variant="Variant.Outlined" Class="mt-3" Icon="@Icons.Material.Filled.RoomService">
+                            Waiting for pickup
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   Color="@GetActionColor(order.OrderStatus)"
+                                   FullWidth="true"
+                                   Class="mt-3"
+                                   Size="Size.Large"
+                                   Disabled="@_updatingOrderIds.Contains(order.Id)"
+                                   OnClick="@(() => AdvanceStatusAsync(order))">
+                            @if (_updatingOrderIds.Contains(order.Id))
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            }
+                            @GetActionLabel(order.OrderStatus)
+                        </MudButton>
+                    }
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private List<OrderModel> _orders = new();
+    private bool _loading = true;
+    private readonly HashSet<int> _updatingOrderIds = new();
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrdersAsync();
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _timer = new System.Threading.Timer(async _ =>
+            {
+                await LoadOrdersAsync();
+                await InvokeAsync(StateHasChanged);
+            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+        }
+        return Task.CompletedTask;
+    }
+
+    private bool _hasLoadedOnce = false;
+
+    private async Task LoadOrdersAsync()
+    {
+        var (success, orders) = await OrderApiService.GetKitchenOrdersCheckedAsync();
+
+        if (!success)
+        {
+            // Don't wipe out orders already on screen just because one poll failed —
+            // only show the error and keep the last known good list visible.
+            if (_hasLoadedOnce)
+            {
+                Snackbar.Add("Couldn't refresh orders — check your connection or login.", MudBlazor.Severity.Error);
+            }
+            _loading = false;
+            return;
+        }
+
+        // API already returns oldest-first, but we sort explicitly here too —
+        // guarantees correct queue order even if that ever changes server-side.
+        _orders = orders.OrderBy(o => o.CreatedAt).ToList();
+        _loading = false;
+        _hasLoadedOnce = true;
+    }
+
+    private async Task AdvanceStatusAsync(OrderModel order)
+    {
+        var nextStatus = GetNextStatus(order.OrderStatus);
+        _updatingOrderIds.Add(order.Id);
+        StateHasChanged();
+
+        var success = await OrderApiService.UpdateOrderStatusAsync(order.Id, nextStatus);
+
+        _updatingOrderIds.Remove(order.Id);
+
+        if (success)
+        {
+            await LoadOrdersAsync();
+            Snackbar.Add($"{order.OrderNumber} moved to {nextStatus}", MudBlazor.Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add($"Couldn't update {order.OrderNumber}. Please try again.", MudBlazor.Severity.Error);
+        }
+
+        StateHasChanged();
+    }
+
+    // ── Status helpers ──────────────────────────────────────────────────
+    // NOTE FOR CASHIER TEAM: "Served" is intentionally NOT reachable from this page.
+    // Kitchen's last action is "Mark Ready". Cashier-side code is responsible for
+    // calling UpdateOrderStatusAsync(orderId, "Served") once the order is delivered.
+
+    private static string GetNextStatus(string current) => current switch
+    {
+        "Pending" => "Preparing",
+        "Preparing" => "Ready",
+        _ => current
+    };
+
+    private static string GetActionLabel(string current) => current switch
+    {
+        "Pending" => "Start Preparing",
+        "Preparing" => "Mark Ready",
+        _ => ""
+    };
+
+    private static Color GetStatusColor(string status) => status switch
+    {
+        "Pending" => Color.Warning,
+        "Preparing" => Color.Info,
+        "Ready" => Color.Success,
+        _ => Color.Default
+    };
+
+    private static Color GetActionColor(string status) => status switch
+    {
+        "Pending" => Color.Primary,
+        "Preparing" => Color.Success,
+        _ => Color.Default
+    };
+
+    private static string GetRelativeTime(DateTime createdAt)
+    {
+        var diff = DateTime.UtcNow - createdAt.ToUniversalTime();
+
+        if (diff.TotalSeconds < 60) return "Just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} min{((int)diff.TotalMinutes == 1 ? "" : "s")} ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} hr{((int)diff.TotalHours == 1 ? "" : "s")} ago";
+        return createdAt.ToString("MMM d, h:mm tt");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_timer is not null)
+            await _timer.DisposeAsync();
+    }
+}

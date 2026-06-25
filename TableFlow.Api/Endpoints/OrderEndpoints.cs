@@ -27,6 +27,8 @@ namespace TableFlow.Api.Endpoints
                         .ThenInclude(i => i.MenuItem)
                     .Include(o => o.OrderItems)
                         .ThenInclude(i => i.Varient)
+                    .Include(o => o.TableSession)
+                        .ThenInclude(s => s.Table)
                     .Where(o => o.SessionId == sessionId)
                     .OrderByDescending(o => o.CreatedAt)
                     .ToListAsync();
@@ -47,13 +49,15 @@ namespace TableFlow.Api.Endpoints
                         .ThenInclude(i => i.MenuItem)
                     .Include(o => o.OrderItems)
                         .ThenInclude(i => i.Varient)
+                    .Include(o => o.TableSession)
+                        .ThenInclude(s => s.Table)
                     .FirstOrDefaultAsync(o => o.Id == id);
 
                 if (order is null) return Results.NotFound();
                 return Results.Ok(MapToResponse(order));
             });
 
-            // GET all pending/active orders — Kitchen
+            // GET all active orders — Kitchen (active = the order's session is still Open)
             orders.MapGet("/kitchen", async (
                 [FromServices] IDbContextFactory<AppDbContext> factory) =>
             {
@@ -64,7 +68,9 @@ namespace TableFlow.Api.Endpoints
                         .ThenInclude(i => i.MenuItem)
                     .Include(o => o.OrderItems)
                         .ThenInclude(i => i.Varient)
-                    .Where(o => o.OrderStatus != OrderStatus.Served)
+                    .Include(o => o.TableSession)
+                        .ThenInclude(s => s.Table)
+                    .Where(o => o.TableSession.SessionStatus == SessionStatus.Open)
                     .OrderBy(o => o.CreatedAt)
                     .ToListAsync();
 
@@ -141,6 +147,8 @@ namespace TableFlow.Api.Endpoints
                         .ThenInclude(i => i.MenuItem)
                     .Include(o => o.OrderItems)
                         .ThenInclude(i => i.Varient)
+                    .Include(o => o.TableSession)
+                        .ThenInclude(s => s.Table)
                     .FirstAsync(o => o.Id == order.Id);
 
                 return Results.Created($"/api/orders/{order.Id}", MapToResponse(created));
@@ -159,6 +167,8 @@ namespace TableFlow.Api.Endpoints
                         .ThenInclude(i => i.MenuItem)
                     .Include(o => o.OrderItems)
                         .ThenInclude(i => i.Varient)
+                    .Include(o => o.TableSession)
+                        .ThenInclude(s => s.Table)
                     .FirstOrDefaultAsync(o => o.Id == id);
 
                 if (order is null) return Results.NotFound();
@@ -212,6 +222,7 @@ namespace TableFlow.Api.Endpoints
         private static OrderResponse MapToResponse(Order order) => new(
             order.Id,
             order.SessionId,
+            order.TableSession.Table.TableNumber, // i add this to make it easier for the kitchen to see which table the order is for without having to look up the session
             order.OrderNumber,
             order.OrderStatus.ToString(),
             order.CreatedAt,
