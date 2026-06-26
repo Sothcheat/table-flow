@@ -239,10 +239,10 @@
     protected override async Task OnInitializedAsync()
     {
         var orders = await OrderApiService.GetSessionOrdersAsync(SessionId);
-        _grandTotal = orders.Sum(o => o.OrderTotal);
 
         _billLines = orders
             .SelectMany(o => o.Items)
+            .Where(i => i.OrderItemStatus != "Unavailable")
             .GroupBy(i => (i.MenuItemId, i.VarientId))
             .Select(g => new BillLine(
                 g.First().ItemName,
@@ -251,6 +251,8 @@
                 g.Sum(i => i.TotalPrice)
             ))
             .ToList();
+
+        _grandTotal = _billLines.Sum(l => l.TotalPrice);
 
         _state = DialogState.Review;
     }

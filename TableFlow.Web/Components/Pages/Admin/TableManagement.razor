@@ -1,6 +1,7 @@
 @page "/admin/tables"
 @using TableFlow.Web.Models
 @using TableFlow.Web.Services
+@using TableFlow.Web.Components.Pages.Cashier
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 @inject TableApiService TableApiService
@@ -40,10 +41,7 @@ else
         <HeaderContent>
             <MudTh>Table Number</MudTh>
             <MudTh>Status</MudTh>
-            @if (IsAdmin)
-            {
-                <MudTh>Actions</MudTh>
-            }
+            <MudTh>Actions</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd>Table @context.TableNumber</MudTd>
@@ -54,9 +52,15 @@ else
                     @context.Status
                 </MudChip>
             </MudTd>
-            @if (IsAdmin)
-            {
-                <MudTd>
+            <MudTd>
+                @* QR view/print — available to Admin and Cashier *@
+                <MudIconButton Icon="@Icons.Material.Filled.QrCode2"
+                               Color="Color.Default"
+                               Size="Size.Small"
+                               Title="Show / print QR"
+                               OnClick="@(() => ShowQrAsync(context))" />
+                @if (IsAdmin)
+                {
                     <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                    Color="Color.Primary"
                                    Size="Size.Small"
@@ -65,8 +69,8 @@ else
                                    Color="Color.Error"
                                    Size="Size.Small"
                                    OnClick="@(() => DeleteTable(context))" />
-                </MudTd>
-            }
+                }
+            </MudTd>
         </RowTemplate>
     </MudTable>
 }
@@ -100,6 +104,24 @@ else
         _loading = true;
         _tables = await TableApiService.GetTablesAsync();
         _loading = false;
+    }
+
+    private async Task ShowQrAsync(TableModel table)
+    {
+        var qr = await TableApiService.GetTableQrAsync(table.Id);
+        if (qr is null || string.IsNullOrEmpty(qr.QrCodeBase64))
+        {
+            Snackbar.Add("QR code unavailable for this table.", MudBlazor.Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            { nameof(QrCodeDialog.QrCodeBase64), qr.QrCodeBase64 },
+            { nameof(QrCodeDialog.TableNumber), table.TableNumber }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        await DialogService.ShowAsync<QrCodeDialog>("", parameters, options);
     }
 
     private async Task OpenAddDialog()

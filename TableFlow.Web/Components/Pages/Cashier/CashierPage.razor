@@ -312,7 +312,7 @@ else
     {
         if (table.Status == "Available")
         {
-            var (success, session, error) = await SessionApiService.OpenSessionAsync(table.Id);
+            var (success, _, error) = await SessionApiService.OpenSessionAsync(table.Id);
             if (!success)
             {
                 Snackbar.Add($"Failed to open session: {error}", MudBlazor.Severity.Error);
@@ -321,18 +321,8 @@ else
 
             await LoadTablesAsync();
             Snackbar.Add($"Table {table.TableNumber} session opened.", MudBlazor.Severity.Success);
-
-            if (!string.IsNullOrEmpty(session?.QrCodeBase64))
-            {
-                var parameters = new DialogParameters
-                {
-                    { nameof(QrCodeDialog.QrCodeBase64), session.QrCodeBase64 },
-                    { nameof(QrCodeDialog.TableNumber), table.TableNumber },
-                    { nameof(QrCodeDialog.SessionId), session.Id }
-                };
-                var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-                await DialogService.ShowAsync<QrCodeDialog>("", parameters, options);
-            }
+            // No QR pop-up here — the static QR sticker lives on the table.
+            // Cashier can re-show/print it via the QR button if a sticker is missing.
         }
         else
         {
@@ -396,11 +386,9 @@ else
 
     private async Task ShowQrCodeAsync(TableModel table)
     {
-        // Use cached session; fall back to a live fetch if not pre-loaded
-        if (!_activeSessions.TryGetValue(table.Id, out var session))
-            session = await SessionApiService.GetActiveSessionAsync(table.Id);
-
-        if (session is null || string.IsNullOrEmpty(session.QrCodeBase64))
+        // The QR is static per-table — fetch it by table id (not tied to a session).
+        var qr = await TableApiService.GetTableQrAsync(table.Id);
+        if (qr is null || string.IsNullOrEmpty(qr.QrCodeBase64))
         {
             Snackbar.Add("QR code unavailable for this table.", MudBlazor.Severity.Warning);
             return;
@@ -408,9 +396,8 @@ else
 
         var parameters = new DialogParameters
         {
-            { nameof(QrCodeDialog.QrCodeBase64), session.QrCodeBase64 },
-            { nameof(QrCodeDialog.TableNumber), table.TableNumber },
-            { nameof(QrCodeDialog.SessionId), session.Id }
+            { nameof(QrCodeDialog.QrCodeBase64), qr.QrCodeBase64 },
+            { nameof(QrCodeDialog.TableNumber), table.TableNumber }
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
         await DialogService.ShowAsync<QrCodeDialog>("", parameters, options);

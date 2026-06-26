@@ -15,4 +15,9 @@
     );
 
     public record UpdateTableStatusRequest(string Status);
+
+    public record TableQrResponse(
+        int TableNumber,
+        string QrCodeBase64
+    );
 }

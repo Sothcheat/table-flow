@@ -55,6 +55,22 @@ public class SessionApiService
 
     private record SessionStatusResponse(bool IsOpen);
 
+    // Resolves a static table QR token to its current session (anonymous — customer scan).
+    // Returns null when the token doesn't match any table (invalid QR).
+    public async Task<TableResolveModel?> ResolveTableTokenAsync(Guid token)
+    {
+        try
+        {
+            var res = await _http.GetAsync($"/api/sessions/by-table-token/{token}");
+            if (!res.IsSuccessStatusCode) return null; // 404 = unknown table/token
+            return await res.Content.ReadFromJsonAsync<TableResolveModel>();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public async Task<(bool Success, SessionModel? Session, string Error)> OpenSessionAsync(int tableId)
     {
         await AttachTokenAsync();

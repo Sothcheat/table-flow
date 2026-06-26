@@ -115,6 +115,11 @@ namespace TableFlow.Api.Data
 
             modelBuilder.Entity<Order>()
                 .HasIndex(o => o.CreatedAt);
+
+            // Static per-table QR token — unique so it can resolve a table on scan
+            modelBuilder.Entity<Table>()
+                .HasIndex(t => t.PublicToken)
+                .IsUnique();
         }
     }
 }

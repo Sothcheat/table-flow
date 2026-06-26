@@ -370,7 +370,9 @@ namespace TableFlow.Api.Endpoints
                 i.OrderItemStatus.ToString(),
                 i.Note
             )).ToList(),
-            order.OrderItems.Sum(i => i.UnitPrice * i.Quantity)
+            order.OrderItems
+                .Where(i => i.OrderItemStatus != OrderItemStatus.Unavailable)
+                .Sum(i => i.UnitPrice * i.Quantity)
         );
     }
 }

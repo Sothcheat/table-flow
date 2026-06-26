@@ -4,7 +4,6 @@ using System.Security.Claims;
 using TableFlow.Api.Data;
 using TableFlow.Api.Data.Entities;
 using TableFlow.Api.DTOs;
-using QRCoder;
 
 namespace TableFlow.Api.Endpoints
 {
@@ -136,8 +135,7 @@ namespace TableFlow.Api.Endpoints
             // GET active session by table id
             sessions.MapGet("/table/{tableId:int}/active", async (
                 int tableId,
-                [FromServices] IDbContextFactory<AppDbContext> factory,
-                [FromServices] IConfiguration config) =>
+                [FromServices] IDbContextFactory<AppDbContext> factory) =>
             {
                 await using var db = await factory.CreateDbContextAsync();
                 var session = await db.TableSessions
@@ -149,16 +147,7 @@ namespace TableFlow.Api.Endpoints
 
                 if (session is null) return Results.NotFound();
 
-                string? qrCodeBase64 = null;
-                try
-                {
-                    var webBaseUrl = config["WebBaseUrl"] ?? "http://localhost:5010";
-                    var menuUrl = $"{webBaseUrl}/menu?sessionId={session.Id}";
-                    qrCodeBase64 = GenerateQrCode(menuUrl);
-                }
-                catch (Exception) { }
-
-                return Results.Ok(MapToResponse(session, qrCodeBase64));
+                return Results.Ok(MapToResponse(session));
             }).RequireAuthorization("CashierOnly");
 
             // GET today's stats for the logged-in cashier
@@ -204,11 +193,36 @@ namespace TableFlow.Api.Endpoints
                 return Results.Ok(new { isOpen = session.SessionStatus == SessionStatus.Open });
             }).AllowAnonymous();
 
+            // GET resolve a static table QR token to its current session — AllowAnonymous (customer scans table sticker)
+            sessions.MapGet("/by-table-token/{token:guid}", async (
+                Guid token,
+                [FromServices] IDbContextFactory<AppDbContext> factory) =>
+            {
+                await using var db = await factory.CreateDbContextAsync();
+
+                var table = await db.Tables
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(t => t.PublicToken == token);
+
+                if (table is null) return Results.NotFound();
+
+                var session = await db.TableSessions
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s =>
+                        s.TableId == table.Id &&
+                        s.SessionStatus == SessionStatus.Open);
+
+                return Results.Ok(new TableTokenResolveResponse(
+                    table.TableNumber,
+                    session is not null,
+                    session?.Id));
+            }).AllowAnonymous();
+
             // POST open session — Cashier only
             sessions.MapPost("/", async (
                 [FromBody] CreateSessionRequest request,
                 [FromServices] IDbContextFactory<AppDbContext> factory,
-                ClaimsPrincipal user, [FromServices] IConfiguration config) =>
+                ClaimsPrincipal user) =>
             {
 
                 await using var db = await factory.CreateDbContextAsync();
@@ -253,22 +267,11 @@ namespace TableFlow.Api.Endpoints
                     return Results.Conflict("Table already has an open session.");
                 }
 
-                string? qrCodeBase64 = null;
-                try
-                {
-                    var webBaseUrl = config["WebBaseUrl"] ?? "http://localhost:5010";
-                    var menuUrl = $"{webBaseUrl}/menu?sessionId={session.Id}";
-                    qrCodeBase64 = GenerateQrCode(menuUrl);
-                }
-                catch (Exception)
-                {
-                }
-
                 // Reload with includes for response
                 await db.Entry(session).Reference(s => s.Table).LoadAsync();
                 await db.Entry(session).Reference(s => s.CreatedBy).LoadAsync();
 
-                return Results.Created($"/api/sessions/{session.Id}", MapToResponse(session, qrCodeBase64));
+                return Results.Created($"/api/sessions/{session.Id}", MapToResponse(session));
             }).RequireAuthorization("CashierOnly");
 
             // PATCH close session — Cashier only
@@ -322,7 +325,7 @@ namespace TableFlow.Api.Endpoints
             }).RequireAuthorization("CashierOnly");
         }
 
-        private static SessionResponse MapToResponse(TableSession session, string? qrCodeBase64 = null) => new(
+        private static SessionResponse MapToResponse(TableSession session) => new(
             session.Id,
             session.TableId,
             session.Table.TableNumber,
@@ -333,16 +336,7 @@ namespace TableFlow.Api.Endpoints
             session.OpenedAt,
             session.ClosedAt,
             session.CreatedById,
-            session.CreatedBy?.UserName ?? string.Empty,
-            qrCodeBase64
+            session.CreatedBy?.UserName ?? string.Empty
         );
-
-        private static string GenerateQrCode(string url)
-        {
-            using var qrCodeData = QRCodeGenerator.GenerateQrCode(url, QRCodeGenerator.ECCLevel.Q);
-            using var qrCode = new PngByteQRCode(qrCodeData);
-            byte[] qrCodeBytes = qrCode.GetGraphic(10);
-            return Convert.ToBase64String(qrCodeBytes);
-        }
     }
 }
