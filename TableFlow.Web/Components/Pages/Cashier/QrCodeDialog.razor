@@ -1,4 +1,5 @@
-﻿@using TableFlow.Web.Models
+@using TableFlow.Web.Models
+@inject IJSRuntime JS
 
 <MudDialog>
     <TitleContent>
@@ -13,15 +14,17 @@
                  alt="QR Code"
                  style="width:250px; height:250px;" />
             <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
-                Session #@SessionId — Ask customer to scan this QR code to view the menu and place orders.
+                Print this and place it on the table. Customers scan it to view the menu and place orders.
             </MudText>
         </div>
     </DialogContent>
     <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@(() => MudDialog.Close())">Close</MudButton>
         <MudButton Variant="Variant.Filled"
                    Color="Color.Primary"
-                   OnClick="@(() => MudDialog.Close())">
-            Done
+                   StartIcon="@Icons.Material.Filled.Print"
+                   OnClick="PrintAsync">
+            Print
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -30,5 +33,9 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public string QrCodeBase64 { get; set; } = string.Empty;
     [Parameter] public int TableNumber { get; set; }
-    [Parameter] public int SessionId { get; set; }
+
+    private async Task PrintAsync()
+    {
+        await JS.InvokeVoidAsync("printQrCode", QrCodeBase64, TableNumber);
+    }
 }

@@ -34,8 +34,8 @@
         }
     }
 </style>
-@* Cart icon in the app bar — only when session is valid *@
-@if (_sessionValid)
+@* Cart icon in the app bar — only when session is active *@
+@if (_state == MenuSessionState.Active)
 {
     <SectionContent SectionName="client-cart-tool">
         <div style="position:relative; display:inline-flex; align-items:center; justify-content:center;">
@@ -57,11 +57,39 @@
     </SectionContent>
 }
 
-@if (!_sessionValid)
+@if (_state == MenuSessionState.Loading)
+{
+    <div style="max-width:600px; margin:0 auto; padding:32px 16px; text-align:center;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"
+                             Style="color:var(--mud-palette-primary);" />
+    </div>
+}
+else if (_state == MenuSessionState.InvalidToken)
 {
     <div style="max-width:600px; margin:0 auto; padding:32px 16px; text-align:center;">
         <MudIcon Icon="@Icons.Material.Filled.QrCodeScanner" Style="font-size:4rem;" Class="mb-4" />
         <MudText Typo="Typo.h6">Please scan the QR code at your table to view the menu.</MudText>
+    </div>
+}
+else if (_state == MenuSessionState.Waiting)
+{
+    <div style="max-width:600px; margin:0 auto; padding:32px 16px; text-align:center;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large"
+                             Style="color:var(--mud-palette-primary);" Class="mb-4" />
+        <MudText Typo="Typo.h6">Table @_tableNumber</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Your table is being set up. Please wait a moment…
+        </MudText>
+    </div>
+}
+else if (_state == MenuSessionState.Ended)
+{
+    <div style="max-width:600px; margin:0 auto; padding:32px 16px; text-align:center;">
+        <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Style="font-size:4rem;" Class="mb-4" />
+        <MudText Typo="Typo.h6">This session has ended</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Thank you! Please ask a staff member if you need anything else.
+        </MudText>
     </div>
 }
 else
@@ -73,7 +101,7 @@ else
                    Variant="Variant.Text"
                    Color="Color.Primary"
                    Class="mb-4"
-                   OnClick="@(() => Navigation.NavigateTo($"/menu?sessionId={SessionId}"))">
+                   OnClick="@(() => Navigation.NavigateTo($"/menu?t={TableToken}"))">
             Back to Menu
         </MudButton>
 
@@ -124,7 +152,7 @@ else
             <MudText Typo="Typo.h5" Style="font-weight:700;" Class="mt-4 mb-1">@_item.ItemName</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-1">@_item.CategoryName</MudText>
 
-            @if (!_item.IsAvailable)
+            @if (!_item.IsEffectivelyAvailable)
             {
                 <MudChip T="string" Color="Color.Error" Size="Size.Small" Class="mb-4">
                     Currently Unavailable
@@ -179,12 +207,12 @@ else
             </div> @* end detail-body *@
 
             <div class="add-cta">
-                @if (_selectedVariant == null || !_item.IsAvailable)
+                @if (_selectedVariant == null || !_item.IsEffectivelyAvailable)
                 {
                     <div style="background:#E2E8F0; border-radius:8px; padding:15px 16px;
                                 text-align:center; cursor:default; user-select:none;">
                         <span style="color:#64748B; font-weight:600; font-size:0.9375rem;">
-                            @(!_item.IsAvailable ? "This item is currently unavailable" : "Select an option above to continue")
+                            @(!_item.IsEffectivelyAvailable ? "This item is currently unavailable" : "Select an option above to continue")
                         </span>
                     </div>
                 }
@@ -204,7 +232,7 @@ else
         @* Cart Drawer *@
         <CartDrawer @ref="_cartDrawer"
                     @bind-Open="_cartOpen"
-                    SessionId="@(SessionId ?? 0)"
+                    SessionId="@(_resolvedSessionId ?? 0)"
                     OnOrderPlaced="OnOrderPlaced" />
 
     </div>
@@ -223,7 +251,12 @@ else
     private int _quantity = 1;
     private VarientModel? _selectedVariant = null;
     private bool _cartOpen = false;
-    private bool _sessionValid = false;
+
+    private MenuSessionState _state = MenuSessionState.Loading;
+    private int _tableNumber;
+    private int? _resolvedSessionId;
+    private System.Threading.Timer? _waitTimer;
+    private System.Threading.Timer? _validityTimer;
 
     protected override void OnInitialized()
     {
@@ -232,28 +265,97 @@ else
 
     private void OnCartChanged() => InvokeAsync(StateHasChanged);
 
-    [SupplyParameterFromQuery(Name = "sessionId")]
-    public int? SessionId { get; set; }
+    [SupplyParameterFromQuery(Name = "t")]
+    public Guid? TableToken { get; set; }
 
 
     protected override async Task OnInitializedAsync()
     {
-        if (SessionId is null or 0)
+        if (TableToken is null || TableToken == Guid.Empty)
         {
-            _loading = false;
+            _state = MenuSessionState.InvalidToken;
             return;
         }
 
-        _sessionValid = await SessionApiService.IsSessionActiveAsync(SessionId.Value);
-        if (!_sessionValid)
+        var resolved = await SessionApiService.ResolveTableTokenAsync(TableToken.Value);
+        if (resolved is null)
         {
-            _loading = false;
+            _state = MenuSessionState.InvalidToken;
             return;
         }
 
+        _tableNumber = resolved.TableNumber;
+
+        if (resolved.IsOpen && resolved.SessionId is int sessionId)
+            await ActivateSessionAsync(sessionId);
+        else
+            EnterWaitingState();
+    }
+
+    // Open session found — load the item and watch for the session closing.
+    private async Task ActivateSessionAsync(int sessionId)
+    {
+        _resolvedSessionId = sessionId;
         _loading = true;
+        _state = MenuSessionState.Active;
+        StateHasChanged();
+
         _item = await MenuApiService.GetMenuItemByIdAsync(Id);
         _loading = false;
+
+        StartValidityPolling();
+        StateHasChanged();
+    }
+
+    // No open session yet — poll until the cashier opens one, then activate.
+    private void EnterWaitingState()
+    {
+        _state = MenuSessionState.Waiting;
+        _waitTimer?.Dispose();
+        _waitTimer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                var resolved = await SessionApiService.ResolveTableTokenAsync(TableToken!.Value);
+                if (resolved is null)
+                {
+                    _waitTimer?.Dispose();
+                    _waitTimer = null;
+                    _state = MenuSessionState.InvalidToken;
+                    StateHasChanged();
+                    return;
+                }
+
+                _tableNumber = resolved.TableNumber;
+                if (resolved.IsOpen && resolved.SessionId is int sessionId)
+                {
+                    _waitTimer?.Dispose();
+                    _waitTimer = null;
+                    await ActivateSessionAsync(sessionId);
+                }
+            });
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    // Detect the cashier closing the session while browsing → "ended" screen.
+    private void StartValidityPolling()
+    {
+        _validityTimer?.Dispose();
+        _validityTimer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                if (_resolvedSessionId is not int sessionId) return;
+                var stillOpen = await SessionApiService.IsSessionActiveAsync(sessionId);
+                if (!stillOpen)
+                {
+                    _validityTimer?.Dispose();
+                    _validityTimer = null;
+                    _state = MenuSessionState.Ended;
+                    StateHasChanged();
+                }
+            });
+        }, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
     }
 
     private void SelectVariant(VarientModel variant)
@@ -285,7 +387,7 @@ else
 
     private void OnOrderPlaced()
     {
-        Navigation.NavigateTo($"/menu?sessionId={SessionId}");
+        Navigation.NavigateTo($"/menu?t={TableToken}");
     }
 
     private string GetVariantStyle(bool isSelected)
@@ -297,5 +399,7 @@ else
     public void Dispose()
     {
         CartService.OnCartChanged -= OnCartChanged;
+        _waitTimer?.Dispose();
+        _validityTimer?.Dispose();
     }
 }

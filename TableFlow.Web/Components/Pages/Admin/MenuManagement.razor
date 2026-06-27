@@ -122,9 +122,9 @@
                     <MudTd Style="text-align:right">$@context.BasePrice.ToString("0.00")</MudTd>
                     <MudTd Style="text-align:center">
                         <MudChip T="string"
-                                 Color="@(context.IsAvailable ? Color.Success : Color.Default)"
+                                 Color="@(context.IsEffectivelyAvailable ? Color.Success : Color.Default)"
                                  Size="Size.Small">
-                            @(context.IsAvailable ? "Yes" : "No")
+                            @(context.IsEffectivelyAvailable ? "Yes" : "No")
                         </MudChip>
                     </MudTd>
                     <MudTd Style="text-align:center">

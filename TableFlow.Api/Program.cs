@@ -53,6 +53,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("KitchenOnly", policy => policy.RequireRole("Kitchen"));
     options.AddPolicy("AdminOrKitchen", policy => policy.RequireRole("Admin", "Kitchen"));
     options.AddPolicy("KitchenOrCashier", policy => policy.RequireRole("Kitchen", "Cashier"));
+    options.AddPolicy("AdminOrCashier", policy => policy.RequireRole("Admin", "Cashier"));
 });
 
 builder.Services.AddCors(options =>

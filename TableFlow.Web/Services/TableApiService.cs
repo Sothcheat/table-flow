@@ -47,6 +47,15 @@ namespace TableFlow.Web.Services
             return await response.Content.ReadFromJsonAsync<List<TableModel>>() ?? [];
         }
 
+        public async Task<TableQrModel?> GetTableQrAsync(int tableId)
+        {
+            await AttachTokenAsync();
+            var response = await _http.GetAsync($"/api/tables/{tableId}/qr");
+            if (await CheckUnauthorizedAsync(response)) return null;
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadFromJsonAsync<TableQrModel>();
+        }
+
         public async Task<(bool Success, string Error)> CreateTableAsync(int tableNumber)
         {
             await AttachTokenAsync();

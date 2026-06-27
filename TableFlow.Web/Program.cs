@@ -66,7 +66,7 @@ builder.Services.AddCascadingAuthenticationState();
 
 builder.Services.AddDataProtection();
 
-builder.Services.AddScoped<ProtectedLocalStorage>();
+builder.Services.AddScoped<ProtectedSessionStorage>();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 
 builder.Services.AddHttpClient("TableFlowApi", client =>

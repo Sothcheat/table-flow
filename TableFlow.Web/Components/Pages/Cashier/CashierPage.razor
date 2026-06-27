@@ -8,6 +8,7 @@
 @inject SessionApiService SessionApiService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AuthenticationStateProvider AuthStateProvider
 @implements IDisposable
 
 <PageTitle>Cashier Dashboard — TableFlow</PageTitle>
@@ -26,7 +27,85 @@
     }
 </style>
 
-<MudText Typo="Typo.h2" Style="font-weight:700;" Class="mt-4 mb-8">Cashier Dashboard</MudText>
+<MudText Typo="Typo.h2" Style="font-weight:700;" Class="mt-4 mb-6">Cashier Dashboard</MudText>
+
+@* ── Ready for Pickup banner — only shows when kitchen has marked orders Ready ── *@
+@if (_readyOrders.Any())
+{
+    <MudPaper Elevation="3" Class="pa-4 mb-6"
+              Style="border-radius:12px; border-left:6px solid #22C55E; background:#F0FDF4;">
+        <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;"
+             @onclick="@(() => _bannerExpanded = !_bannerExpanded)">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <MudIcon Icon="@Icons.Material.Filled.RoomService" Style="color:#15803D; font-size:1.5rem;" />
+                <MudText Typo="Typo.h6" Style="font-weight:700; color:#15803D;">
+                    Ready for Pickup (@_readyOrders.Count)
+                </MudText>
+            </div>
+            <MudIcon Icon="@(_bannerExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                     Style="color:#15803D;" />
+        </div>
+        @if (_bannerExpanded)
+        {
+            <div style="margin-top:12px; max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+                @foreach (var order in _readyOrders)
+                {
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:white; padding:10px 14px; border-radius:8px;">
+                        <div>
+                            <MudText Typo="Typo.body1" Style="font-weight:600;">@order.OrderNumber</MudText>
+                            <MudText Typo="Typo.caption" Style="color:#64748B;">Table @order.TableNumber</MudText>
+                        </div>
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Style="font-weight:700;">
+                            At the pass
+                        </MudChip>
+                    </div>
+                }
+            </div>
+        }
+    </MudPaper>
+}
+
+@* ── Unavailable items warning banner ── *@
+@if (_unavailableOrders.Any())
+{
+    <MudPaper Elevation="3" Class="pa-4 mb-6"
+              Style="border-radius:12px; border-left:6px solid #F59E0B; background:#FFFBEB;">
+        <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;"
+             @onclick="@(() => _unavailableBannerExpanded = !_unavailableBannerExpanded)">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <MudIcon Icon="@Icons.Material.Filled.Warning" Style="color:#B45309; font-size:1.5rem;" />
+                <MudText Typo="Typo.h6" Style="font-weight:700; color:#B45309;">
+                    Unavailable Items (@_unavailableOrders.Count order@(_unavailableOrders.Count == 1 ? "" : "s") affected)
+                </MudText>
+            </div>
+            <MudIcon Icon="@(_unavailableBannerExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                     Style="color:#B45309;" />
+        </div>
+        @if (_unavailableBannerExpanded)
+        {
+            <div style="margin-top:12px; max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+                @foreach (var order in _unavailableOrders)
+                {
+                    <div style="background:white; padding:10px 14px; border-radius:8px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <MudText Typo="Typo.body1" Style="font-weight:600;">@order.OrderNumber</MudText>
+                            <MudText Typo="Typo.caption" Style="color:#64748B;">Table @order.TableNumber</MudText>
+                        </div>
+                        @foreach (var item in order.Items.Where(i => i.OrderItemStatus == "Unavailable"))
+                        {
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <MudIcon Icon="@Icons.Material.Filled.Cancel" Style="color:#EF4444; font-size:0.9rem;" />
+                                <MudText Typo="Typo.body2" Style="color:#EF4444; font-weight:500;">
+                                    @item.ItemName@(item.VarientName is not null ? $" ({item.VarientName})" : "") ×@item.Quantity
+                                </MudText>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </MudPaper>
+}
 
 @if (_loading)
 {
@@ -140,7 +219,15 @@ else
                             Table @table.TableNumber
                         </MudText>
                         <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,0.9);">
-                            Occupied
+                            @if (_activeSessions.TryGetValue(table.Id, out var s) && s.CreatedById != _currentUserId)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Lock" Style="font-size:0.75rem; vertical-align:middle;" />
+                                <span> @s.CreatedByName</span>
+                            }
+                            else
+                            {
+                                <span>Occupied</span>
+                            }
                         </MudText>
                         @if (_activeSessions.TryGetValue(table.Id, out var session))
                         {
@@ -159,12 +246,19 @@ else
     private List<TableModel> _tables = [];
     private Dictionary<int, SessionModel> _activeSessions = new();
     private CashierStatsModel? _myStats;
+    private List<OrderModel> _readyOrders = new();
+    private bool _bannerExpanded = true;
+    private List<OrderModel> _unavailableOrders = new();
+    private bool _unavailableBannerExpanded = true;
     private bool _loading = true;
     private DateTime _lastRefreshed = DateTime.Now;
     private System.Threading.Timer? _refreshTimer;
+    private string _currentUserId = "";
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
         await LoadTablesAsync();
 
         // Silent auto-refresh every 30 seconds
@@ -182,12 +276,16 @@ else
     {
         if (showLoader) _loading = true;
 
-        // Tables and my stats are independent — fetch in parallel
+        // Fetch tables, stats, ready orders, and unavailable alerts in parallel
         var tablesTask = TableApiService.GetTablesAsync();
         var statsTask = SessionApiService.GetMyStatsAsync();
-        await Task.WhenAll(tablesTask, statsTask);
+        var readyTask = OrderApiService.GetReadyOrdersAsync();
+        var unavailableTask = OrderApiService.GetUnavailableAlertOrdersAsync();
+        await Task.WhenAll(tablesTask, statsTask, readyTask, unavailableTask);
         _tables = tablesTask.Result;
         _myStats = statsTask.Result;
+        _readyOrders = readyTask.Result;
+        _unavailableOrders = unavailableTask.Result;
 
         // Pre-fetch active sessions for occupied tables in parallel
         var occupied = _tables.Where(t => t.Status == "Occupied").ToList();
@@ -214,7 +312,7 @@ else
     {
         if (table.Status == "Available")
         {
-            var (success, session, error) = await SessionApiService.OpenSessionAsync(table.Id);
+            var (success, _, error) = await SessionApiService.OpenSessionAsync(table.Id);
             if (!success)
             {
                 Snackbar.Add($"Failed to open session: {error}", MudBlazor.Severity.Error);
@@ -223,18 +321,8 @@ else
 
             await LoadTablesAsync();
             Snackbar.Add($"Table {table.TableNumber} session opened.", MudBlazor.Severity.Success);
-
-            if (!string.IsNullOrEmpty(session?.QrCodeBase64))
-            {
-                var parameters = new DialogParameters
-                {
-                    { nameof(QrCodeDialog.QrCodeBase64), session.QrCodeBase64 },
-                    { nameof(QrCodeDialog.TableNumber), table.TableNumber },
-                    { nameof(QrCodeDialog.SessionId), session.Id }
-                };
-                var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
-                await DialogService.ShowAsync<QrCodeDialog>("", parameters, options);
-            }
+            // No QR pop-up here — the static QR sticker lives on the table.
+            // Cashier can re-show/print it via the QR button if a sticker is missing.
         }
         else
         {
@@ -248,6 +336,12 @@ else
                     return;
                 }
                 activeSession = fetched;
+            }
+
+            if (activeSession.CreatedById != _currentUserId)
+            {
+                Snackbar.Add($"Session opened by {activeSession.CreatedByName}. Only they can close it.", MudBlazor.Severity.Warning);
+                return;
             }
 
             var parameters = new DialogParameters
@@ -292,11 +386,9 @@ else
 
     private async Task ShowQrCodeAsync(TableModel table)
     {
-        // Use cached session; fall back to a live fetch if not pre-loaded
-        if (!_activeSessions.TryGetValue(table.Id, out var session))
-            session = await SessionApiService.GetActiveSessionAsync(table.Id);
-
-        if (session is null || string.IsNullOrEmpty(session.QrCodeBase64))
+        // The QR is static per-table — fetch it by table id (not tied to a session).
+        var qr = await TableApiService.GetTableQrAsync(table.Id);
+        if (qr is null || string.IsNullOrEmpty(qr.QrCodeBase64))
         {
             Snackbar.Add("QR code unavailable for this table.", MudBlazor.Severity.Warning);
             return;
@@ -304,9 +396,8 @@ else
 
         var parameters = new DialogParameters
         {
-            { nameof(QrCodeDialog.QrCodeBase64), session.QrCodeBase64 },
-            { nameof(QrCodeDialog.TableNumber), table.TableNumber },
-            { nameof(QrCodeDialog.SessionId), session.Id }
+            { nameof(QrCodeDialog.QrCodeBase64), qr.QrCodeBase64 },
+            { nameof(QrCodeDialog.TableNumber), table.TableNumber }
         };
         var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
         await DialogService.ShowAsync<QrCodeDialog>("", parameters, options);

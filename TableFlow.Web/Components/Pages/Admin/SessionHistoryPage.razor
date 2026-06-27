@@ -41,7 +41,7 @@ else
                 <MudButton Variant="@(_filter == f.Key ? Variant.Filled : Variant.Outlined)"
                            Color="Color.Primary"
                            Size="Size.Small"
-                           OnClick="@(() => SetFilter(f.Key))">
+                           OnClick="@(() => SetFilter(f.Key))" Disabled="_loading">
                     @f.Label
                 </MudButton>
             }
@@ -49,8 +49,9 @@ else
 
         @* Search — stretches to fill the remaining space *@
         <MudTextField @bind-Value="_search"
-                      @bind-Value:after="ApplySearch"
+                      @bind-Value:after="OnSearchChanged"
                       Immediate="true"
+                      DebounceInterval="400"
                       Placeholder="Search table or cashier…"
                       Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Filled.Search"
@@ -61,12 +62,12 @@ else
     </MudStack>
 
     @* ── SUMMARY CARDS ────────────────────────────────────────────── *@
-    @if (_visibleSessions.Count > 0)
+    @if (_totalCount > 0)
     {
-        var totalRevenue   = _visibleSessions.Where(s => s.TotalAmount.HasValue).Sum(s => s.TotalAmount!.Value);
-        var openCount      = _visibleSessions.Count(s => s.SessionStatus == "Open");
-        var cashCount      = _visibleSessions.Count(s => s.PaymentMethod == "Cash");
-        var khqrCount      = _visibleSessions.Count(s => s.PaymentMethod == "KHQR");
+        var totalRevenue = _totalRevenue;
+        var openCount    = _openCount;
+        var cashCount    = _cashCount;
+        var khqrCount    = _khqrCount;
 
         <MudGrid Spacing="2" Class="mb-5">
             @* Sessions *@
@@ -77,7 +78,7 @@ else
                             <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Style="color:#0D6B63;" Size="Size.Small" />
                         </div>
                         <div>
-                            <div style="font-size:1.4rem; font-weight:700; line-height:1.2; color:#1E293B;">@_visibleSessions.Count</div>
+                            <div style="font-size:1.4rem; font-weight:700; line-height:1.2; color:#1E293B;">@_totalCount</div>
                             <div style="font-size:0.72rem; color:#475569; font-weight:500;">Total Sessions</div>
                         </div>
                     </div>
@@ -136,7 +137,7 @@ else
     }
 
     @* ── SESSION LIST ─────────────────────────────────────────────── *@
-    @if (_visibleSessions.Count == 0)
+    @if (_items.Count == 0)
     {
         <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09);" Class="pa-10 d-flex flex-column align-center">
             <MudIcon Icon="@Icons.Material.Filled.SearchOff" Color="Color.Secondary" Size="Size.Large" Class="mb-2" />
@@ -146,7 +147,7 @@ else
     else
     {
         <MudExpansionPanels MultiExpansion="true" Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); overflow:hidden;">
-            @foreach (var session in _visibleSessions)
+            @foreach (var session in _items)
             {
                 <MudExpansionPanel @key="session.Id"
                                    ExpandedChanged="@((expanded) => OnSessionExpandedAsync(session.Id, expanded))">
@@ -319,18 +320,36 @@ else
                 </MudExpansionPanel>
             }
         </MudExpansionPanels>
+
+        @if (_totalPages > 1)
+        {
+            <div class="d-flex justify-center mt-4 mb-2">
+                <MudPagination Count="@_totalPages"
+                               Selected="_page"
+                               SelectedChanged="OnPageChanged"
+                               Color="Color.Primary"
+                               ShowFirstButton="true"
+                               ShowLastButton="true" />
+            </div>
+        }
     }
 }
 
 @code {
-    private List<TableFlow.Web.Models.SessionModel> _sessions = [];
-    private List<TableFlow.Web.Models.SessionModel> _filteredSessions = [];
-    private List<TableFlow.Web.Models.SessionModel> _visibleSessions = [];
+    private List<TableFlow.Web.Models.SessionModel> _items = [];
     private Dictionary<int, List<OrderModel>> _ordersCache = new();
     private HashSet<int> _ordersLoading = new();
     private bool _loading = true;
     private string _filter = "all";
     private string _search = string.Empty;
+    private int _page = 1;
+    private const int PageSize = 25;
+    private int _totalCount;
+    private decimal _totalRevenue;
+    private int _openCount;
+    private int _cashCount;
+    private int _khqrCount;
+    private int _totalPages => (int)Math.Ceiling(_totalCount / (double)PageSize);
 
     private record FilterOption(string Key, string Label);
     private readonly List<FilterOption> _filters =
@@ -340,44 +359,40 @@ else
         new("all",   "All Time"),
     ];
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
     {
-        _sessions = await SessionApiService.GetSessionHistoryAsync();
-        ApplyFilter();
+        _loading = true;
+        var result = await SessionApiService.GetSessionHistoryAsync(_page, PageSize, _filter, _search);
+        _items        = result.Items;
+        _totalCount   = result.TotalCount;
+        _totalRevenue = result.TotalRevenue;
+        _openCount    = result.OpenCount;
+        _cashCount    = result.CashCount;
+        _khqrCount    = result.KhqrCount;
         _loading = false;
     }
 
-    private void SetFilter(string filter)
+    private async Task SetFilter(string filter)
     {
         _filter = filter;
-        ApplyFilter();
+        _page = 1;
+        _ordersCache.Clear();
+        await LoadAsync();
     }
 
-    private void ApplyFilter()
+    private async Task OnSearchChanged()
     {
-        var now = DateTime.UtcNow;
-        _filteredSessions = _filter switch
-        {
-            "today" => _sessions.Where(s => s.OpenedAt.Date == now.Date).ToList(),
-            "week"  => _sessions.Where(s => s.OpenedAt >= now.AddDays(-7)).ToList(),
-            _       => _sessions
-        };
-        ApplySearch();
+        _page = 1;
+        _ordersCache.Clear();
+        await LoadAsync();
     }
 
-    private void ApplySearch()
+    private async Task OnPageChanged(int page)
     {
-        if (string.IsNullOrWhiteSpace(_search))
-        {
-            _visibleSessions = _filteredSessions;
-            return;
-        }
-        var q = _search.Trim().ToLower();
-        _visibleSessions = _filteredSessions
-            .Where(s => s.TableNumber.ToString().Contains(q) ||
-                        $"table {s.TableNumber}".Contains(q) ||
-                        s.CreatedByName.ToLower().Contains(q))
-            .ToList();
+        _page = page;
+        await LoadAsync();
     }
 
     private async Task OnSessionExpandedAsync(int sessionId, bool expanded)

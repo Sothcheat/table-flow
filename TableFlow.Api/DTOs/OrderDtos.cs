@@ -46,4 +46,12 @@
         List<OrderItemResponse> Items,
         decimal OrderTotal
     );
+
+    public record OrderHistoryPageResponse(
+        List<OrderResponse> Orders,
+        int TotalCount,
+        int Page,
+        int PageSize,
+        int TotalPages
+    );
 }

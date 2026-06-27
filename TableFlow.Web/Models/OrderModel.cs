@@ -28,6 +28,15 @@ public class OrderItemModel
     public string? Note { get; set; }
 }
 
+public class OrderHistoryPageModel
+{
+    public List<OrderModel> Orders { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
+}
+
 public class SessionStatsModel
 {
     public decimal TodayRevenue { get; set; }

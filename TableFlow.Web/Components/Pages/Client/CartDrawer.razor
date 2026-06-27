@@ -248,17 +248,20 @@
                 {
                     @foreach (var order in _sessionOrders)
                     {
+                        var (orderLabel, orderBg) = GetOrderStatusDisplay(order.OrderStatus);
                         <MudPaper Elevation="0" Class="mb-3"
                                   Style="border-radius:12px; border:1px solid rgba(0,0,0,0.08); overflow:hidden;">
                             <div style="padding:10px 14px; background:#F8FAFC; display:flex; justify-content:space-between; align-items:center;">
-                                <MudText Typo="Typo.body2" Style="font-weight:700; color:#1E293B;">@order.OrderNumber</MudText>
-                                <MudText Typo="Typo.caption" Style="color:#64748B;">@order.CreatedAt.ToLocalTime().ToString("HH:mm")</MudText>
+                                <div>
+                                    <MudText Typo="Typo.body2" Style="font-weight:700; color:#1E293B;">@order.OrderNumber</MudText>
+                                    <MudText Typo="Typo.caption" Style="color:#64748B;">@order.CreatedAt.ToLocalTime().ToString("HH:mm")</MudText>
+                                </div>
+                                <span style="font-size:0.65rem; font-weight:700; background:@orderBg; color:white; border-radius:100px; padding:3px 10px; white-space:nowrap;">@orderLabel</span>
                             </div>
                             <MudDivider />
                             <div style="padding:4px 14px;">
                                 @foreach (var item in order.Items)
                                 {
-                                    var (label, bg) = GetStatusDisplay(item.OrderItemStatus);
                                     <div style="display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid rgba(0,0,0,0.04);">
                                         <div style="flex:1; min-width:0;">
                                             <div style="font-size:0.85rem; font-weight:600; color:#334155;">@item.ItemName</div>
@@ -267,10 +270,7 @@
                                                 <div style="font-size:0.7rem; color:#6366F1;">@item.VarientName</div>
                                             }
                                         </div>
-                                        <div style="display:flex; align-items:center; gap:8px; margin-left:8px; flex-shrink:0;">
-                                            <span style="font-size:0.75rem; color:#64748B;">×@item.Quantity</span>
-                                            <span style="font-size:0.65rem; font-weight:700; background:@bg; color:white; border-radius:100px; padding:2px 8px; white-space:nowrap;">@label</span>
-                                        </div>
+                                        <span style="font-size:0.75rem; color:#64748B; margin-left:8px;">×@item.Quantity</span>
                                     </div>
                                 }
                             </div>
@@ -368,14 +368,13 @@
         _ordersLoading = false;
     }
 
-    private static (string Label, string Color) GetStatusDisplay(string status) => status switch
+    private static (string Label, string Color) GetOrderStatusDisplay(string status) => status switch
     {
-        "Waiting"     => ("Pending",     "#94A3B8"),
-        "Preparing"   => ("Preparing",   "#F59E0B"),
-        "Done"        => ("Ready",       "#3B82F6"),
-        "Delivered"   => ("Delivered",   "#0D6B63"),
-        "Unavailable" => ("Unavailable", "#EF4444"),
-        _             => (status,        "#94A3B8")
+        "Pending"   => ("Pending",   "#94A3B8"),
+        "Preparing" => ("Preparing", "#F59E0B"),
+        "Ready"     => ("Ready!",    "#22C55E"),
+        "Served"    => ("Served",    "#0D6B63"),
+        _           => (status,      "#94A3B8")
     };
 
     private async Task OnOpenChanged(bool value)

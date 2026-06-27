@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using TableFlow.Api.Data;
 using TableFlow.Api.Data.Entities;
 using TableFlow.Api.DTOs;
+using TableFlow.Api.Services;
 
 namespace TableFlow.Api.Endpoints
 {
@@ -24,6 +25,23 @@ namespace TableFlow.Api.Endpoints
                 )).ToList();
                 return Results.Ok(response);
             });
+
+            // GET static QR for a table — Admin + Cashier (view/print the table sticker)
+            tables.MapGet("/{id:int}/qr", async ([FromServices] IDbContextFactory<AppDbContext> factory,
+                [FromServices] IConfiguration config, int id) =>
+            {
+                await using var db = await factory.CreateDbContextAsync();
+
+                var table = await db.Tables.FindAsync(id);
+                if (table is null)
+                    return Results.NotFound();
+
+                var webBaseUrl = config["WebBaseUrl"] ?? "http://localhost:5010";
+                var menuUrl = $"{webBaseUrl}/menu?t={table.PublicToken}";
+                var qrCodeBase64 = QrCodeHelper.GenerateBase64(menuUrl);
+
+                return Results.Ok(new TableQrResponse(table.TableNumber, qrCodeBase64));
+            }).RequireAuthorization("AdminOrCashier");
 
             // POST create table — Admin only
             tables.MapPost("/", async ([FromServices] IDbContextFactory<AppDbContext> factory,
