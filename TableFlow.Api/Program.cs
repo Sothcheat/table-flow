@@ -1,11 +1,15 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Threading.RateLimiting;
 using TableFlow.Api.Data;
 using TableFlow.Api.Data.Entities;
 using TableFlow.Api.Endpoints;
+using TableFlow.Api.Hubs;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -60,11 +64,27 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
     {
-        policy.WithOrigins("https://localhost:7001")
-        .AllowAnyHeader()
-        .AllowAnyMethod()
-        .AllowCredentials();
+        var allowedOrigins = builder.Configuration["AllowedOrigins"]?.Split(',', StringSplitOptions.TrimEntries)
+            ?? ["https://localhost:7001"];
+        policy.WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
+});
+
+builder.Services.AddSignalR();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("anonymous", opt =>
+    {
+        opt.PermitLimit = 30;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit = 5;
+    });
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
 
 builder.Services.AddOpenApi();
@@ -77,12 +97,20 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-if(!app.Environment.IsDevelopment())
+// Trust reverse proxy headers (Railway, nginx, etc.) so HTTPS redirect works correctly
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
+if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 app.UseCors("AllowBlazor");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
+app.MapHub<TableFlowHub>("/hubs/tableflow").AllowAnonymous();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapMenuEndpoints();

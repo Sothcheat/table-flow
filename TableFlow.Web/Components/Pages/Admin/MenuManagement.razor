@@ -50,12 +50,19 @@
             <MudTable Items="_filteredCategories" Hover="true" Striped="true" Dense="false">
                 <HeaderContent>
                     <MudTh Style="font-weight:600">Name</MudTh>
+                    <MudTh Style="text-align:center; font-weight:600">Station</MudTh>
                     <MudTh Style="text-align:center; font-weight:600">Display Order</MudTh>
                     <MudTh Style="text-align:center; font-weight:600">Items</MudTh>
                     <MudTh Style="text-align:center; font-weight:600">Actions</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd>@context.CategoryName</MudTd>
+                    <MudTd Style="text-align:center">
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(context.StationName == "Bar" ? Color.Info : Color.Default)">
+                            @context.StationName
+                        </MudChip>
+                    </MudTd>
                     <MudTd Style="text-align:center">@context.DisplayOrder</MudTd>
                     <MudTd Style="text-align:center">@context.ItemCount</MudTd>
                     <MudTd Style="text-align:center">
@@ -318,11 +325,10 @@
 
         if (confirmed == true)
         {
-            var success = await MenuService.DeleteMenuItemAsync(item.Id);
-            Snackbar.Add(success ? "Menu item deleted." : "Failed to delete menu item.", success ? MudBlazor.Severity.Success : MudBlazor.Severity.Error);
-
+            var (success, error) = await MenuService.DeleteMenuItemAsync(item.Id);
             if (success)
             {
+                Snackbar.Add("Menu item deleted.", MudBlazor.Severity.Success);
                 var cat = _categories.FirstOrDefault(c => c.Id == item.CategoryId);
                 if (cat is not null)
                 {
@@ -330,6 +336,11 @@
                     _categories[index] = cat with { ItemCount = cat.ItemCount - 1 };
                 }
                 await LoadMenuItemsAsync();
+            }
+            else
+            {
+                Snackbar.Add(string.IsNullOrWhiteSpace(error) ? "Failed to delete menu item." : error,
+                    MudBlazor.Severity.Error);
             }
         }
     }

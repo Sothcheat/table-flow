@@ -1,6 +1,7 @@
 @using TableFlow.Web.Models
 @using TableFlow.Web.Services
 @inject OrderApiService OrderApiService
+@inject AppUpdateService AppUpdates
 @inject ISnackbar Snackbar
 @implements IDisposable
 
@@ -48,7 +49,10 @@
                           Style="border-radius:12px; border:1px solid rgba(0,0,0,0.08); overflow:hidden;">
                     <div style="padding:10px 16px; background:#F8FAFC; display:flex; justify-content:space-between; align-items:center; gap:8px;">
                         <div>
-                            <MudText Typo="Typo.body1" Style="font-weight:700; color:#1E293B;">@order.OrderNumber</MudText>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <MudText Typo="Typo.body1" Style="font-weight:700; color:#1E293B;">@order.OrderNumber</MudText>
+                                <span style="font-size:0.62rem; font-weight:700; background:#0D6B63; color:white; border-radius:100px; padding:2px 7px; flex-shrink:0;">@order.StationName</span>
+                            </div>
                             <MudText Typo="Typo.caption" Style="color:#64748B;">@order.CreatedAt.ToLocalTime().ToString("HH:mm")</MudText>
                         </div>
                         <span style="font-size:0.7rem; font-weight:700; background:@GetOrderStatusColor(order.OrderStatus); color:white; border-radius:100px; padding:3px 10px; white-space:nowrap;">
@@ -92,19 +96,25 @@
     private List<OrderModel> _orders = [];
     private bool _loading = true;
     private bool _refreshing = false;
-    private System.Threading.Timer? _timer;
 
     protected override async Task OnInitializedAsync()
     {
+        AppUpdates.OrdersUpdated += OnOrdersUpdated;
         await LoadOrdersAsync();
-        _timer = new System.Threading.Timer(async _ =>
+    }
+
+    private void OnOrdersUpdated(int sessionId)
+    {
+        if (sessionId != -1 && sessionId != SessionId) return;
+        try
         {
-            await InvokeAsync(async () =>
+            InvokeAsync(async () =>
             {
                 await LoadOrdersAsync(silent: true);
                 StateHasChanged();
             });
-        }, null, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(20));
+        }
+        catch (ObjectDisposedException) { AppUpdates.OrdersUpdated -= OnOrdersUpdated; }
     }
 
     private async Task LoadOrdersAsync(bool silent = false)
@@ -135,5 +145,5 @@
         _             => (status,        "#94A3B8")
     };
 
-    public void Dispose() => _timer?.Dispose();
+    public void Dispose() => AppUpdates.OrdersUpdated -= OnOrdersUpdated;
 }

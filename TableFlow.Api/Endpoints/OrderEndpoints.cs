@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using TableFlow.Api.Data;
 using TableFlow.Api.Data.Entities;
 using TableFlow.Api.DTOs;
+using TableFlow.Api.Hubs;
 
 namespace TableFlow.Api.Endpoints
 {
@@ -75,6 +77,7 @@ namespace TableFlow.Api.Endpoints
                     .Where(o => o.TableSession.SessionStatus == SessionStatus.Open
                              && (o.OrderStatus == OrderStatus.Pending || o.OrderStatus == OrderStatus.Preparing))
                     .OrderBy(o => o.CreatedAt)
+                    .AsSplitQuery()
                     .ToListAsync();
 
                 var response = orderList.Select(MapToResponse).ToList();
@@ -98,6 +101,7 @@ namespace TableFlow.Api.Endpoints
                     .Where(o => o.TableSession.SessionStatus == SessionStatus.Open
                              && o.OrderStatus == OrderStatus.Ready)
                     .OrderBy(o => o.CreatedAt)
+                    .AsSplitQuery()
                     .ToListAsync();
 
                 return Results.Ok(readyOrders.Select(MapToResponse).ToList());
@@ -177,13 +181,21 @@ namespace TableFlow.Api.Endpoints
             // POST create order — called when customer places order
             orders.MapPost("/", async (
                 [FromBody] CreateOrderRequest request,
-                [FromServices] IDbContextFactory<AppDbContext> factory) =>
+                [FromServices] IDbContextFactory<AppDbContext> factory,
+                [FromServices] IHubContext<TableFlowHub> hub) =>
             {
                 await using var db = await factory.CreateDbContextAsync();
 
-                // Validate session exists and is open
+                // Validate the QR token belongs to the session's table
+                var table = await db.Tables
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(t => t.PublicToken == request.TableToken);
+                if (table is null) return Results.Forbid();
+
+                // Validate session exists, is open, and matches the token's table
                 var session = await db.TableSessions.FindAsync(request.SessionId);
                 if (session is null) return Results.NotFound("Session not found.");
+                if (session.TableId != table.Id) return Results.Forbid();
                 if (session.SessionStatus == SessionStatus.Closed)
                     return Results.Conflict("Session is already closed.");
 
@@ -191,7 +203,7 @@ namespace TableFlow.Api.Endpoints
                 if (request.Items is null || request.Items.Count == 0)
                     return Results.BadRequest("Order must have at least one item.");
 
-                // Batch-load all referenced menu items and variants — 2 queries instead of N*2
+                // Batch-load all referenced menu items (with category for station) and variants
                 var menuItemIds = request.Items.Select(i => i.MenuItemId).Distinct().ToList();
                 var variantIds  = request.Items
                     .Where(i => i.VarientId.HasValue)
@@ -200,6 +212,7 @@ namespace TableFlow.Api.Endpoints
                     .ToList();
 
                 var menuItemMap = await db.MenuItems
+                    .Include(m => m.Category)
                     .Where(m => menuItemIds.Contains(m.Id))
                     .ToDictionaryAsync(m => m.Id);
 
@@ -209,67 +222,121 @@ namespace TableFlow.Api.Endpoints
                         .ToDictionaryAsync(v => v.Id)
                     : new Dictionary<int, MenuItemVarient>();
 
-                // Generate order number
-                var orderCount = await db.Orders
-                    .Where(o => o.SessionId == request.SessionId)
-                    .CountAsync();
-                var orderNumber = $"ORD-{request.SessionId:D4}-{(orderCount + 1):D3}";
-
-                var order = new Order
-                {
-                    SessionId = request.SessionId,
-                    OrderNumber = orderNumber,
-                    OrderStatus = OrderStatus.Pending,
-                    Note = request.Note,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                // Build order items using dictionary lookups — zero extra DB calls
+                // Validate all items exist before creating anything
                 foreach (var item in request.Items)
                 {
-                    if (!menuItemMap.TryGetValue(item.MenuItemId, out var menuItem))
+                    if (!menuItemMap.ContainsKey(item.MenuItemId))
                         return Results.BadRequest($"Menu item {item.MenuItemId} not found.");
-
-                    decimal unitPrice = menuItem.BasePrice;
-                    if (item.VarientId.HasValue)
-                    {
-                        if (!variantMap.TryGetValue(item.VarientId.Value, out var variant))
-                            return Results.BadRequest($"Variant {item.VarientId} not found.");
-                        unitPrice = variant.Price;
-                    }
-
-                    order.OrderItems.Add(new OrderItem
-                    {
-                        MenuItemId = item.MenuItemId,
-                        VarientId = item.VarientId,
-                        Quantity = item.Quantity,
-                        UnitPrice = unitPrice,
-                        OrderItemStatus = OrderItemStatus.Waiting,
-                        Note = item.Note
-                    });
+                    if (item.VarientId.HasValue && !variantMap.ContainsKey(item.VarientId.Value))
+                        return Results.BadRequest($"Variant {item.VarientId} not found.");
                 }
 
-                db.Orders.Add(order);
+                // Base order count for sequential numbering across all tickets in this checkout
+                var baseOrderCount = await db.Orders
+                    .Where(o => o.SessionId == request.SessionId)
+                    .CountAsync();
+
+                // Group items by station — one ticket per station
+                var stationGroups = request.Items
+                    .GroupBy(i => menuItemMap[i.MenuItemId].Category.StationName)
+                    .OrderBy(g => g.Key)
+                    .ToList();
+
+                var createdOrders = new List<Order>();
+                for (int idx = 0; idx < stationGroups.Count; idx++)
+                {
+                    var group = stationGroups[idx];
+                    var ticketNumber = $"ORD-{request.SessionId:D4}-{(baseOrderCount + idx + 1):D3}";
+
+                    var order = new Order
+                    {
+                        SessionId = request.SessionId,
+                        OrderNumber = ticketNumber,
+                        StationName = group.Key,
+                        OrderStatus = OrderStatus.Pending,
+                        Note = request.Note,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    foreach (var item in group)
+                    {
+                        var menuItem = menuItemMap[item.MenuItemId];
+                        decimal unitPrice = menuItem.BasePrice;
+                        if (item.VarientId.HasValue)
+                            unitPrice = variantMap[item.VarientId.Value].Price;
+
+                        order.OrderItems.Add(new OrderItem
+                        {
+                            MenuItemId = item.MenuItemId,
+                            VarientId = item.VarientId,
+                            Quantity = item.Quantity,
+                            UnitPrice = unitPrice,
+                            OrderItemStatus = OrderItemStatus.Waiting,
+                            Note = item.Note
+                        });
+                    }
+
+                    createdOrders.Add(order);
+                }
+
+                db.Orders.AddRange(createdOrders);
                 await db.SaveChangesAsync();
 
-                // Reload with includes for response
-                var created = await db.Orders
+                // Reload all created tickets with full includes for the response
+                var createdIds = createdOrders.Select(o => o.Id).ToList();
+                var reloaded = await db.Orders
                     .Include(o => o.OrderItems)
                         .ThenInclude(i => i.MenuItem)
                     .Include(o => o.OrderItems)
                         .ThenInclude(i => i.Varient)
                     .Include(o => o.TableSession)
                         .ThenInclude(s => s.Table)
-                    .FirstAsync(o => o.Id == order.Id);
+                    .Where(o => createdIds.Contains(o.Id))
+                    .OrderBy(o => o.OrderNumber)
+                    .ToListAsync();
 
-                return Results.Created($"/api/orders/{order.Id}", MapToResponse(created));
-            }).AllowAnonymous(); // TODO: Replace with session validation when QR flow is built
+                await hub.Clients.All.SendAsync("OrdersUpdated", request.SessionId);
+                return Results.Ok(reloaded.Select(MapToResponse).ToList());
+            }).AllowAnonymous().RequireRateLimiting("anonymous"); // TableToken validates caller owns the table
+
+            // PATCH cancel order — Cashier voids a Pending/Preparing order (customer leaving, wrong order, etc.)
+            orders.MapPatch("/{id:int}/cancel", async (
+                int id,
+                [FromServices] IDbContextFactory<AppDbContext> factory,
+                [FromServices] IHubContext<TableFlowHub> hub) =>
+            {
+                await using var db = await factory.CreateDbContextAsync();
+
+                var order = await db.Orders
+                    .Include(o => o.OrderItems)
+                    .Include(o => o.TableSession).ThenInclude(s => s.Table)
+                    .FirstOrDefaultAsync(o => o.Id == id);
+
+                if (order is null) return Results.NotFound();
+                if (order.OrderStatus == OrderStatus.Cancelled)
+                    return Results.Conflict("Order is already cancelled.");
+                if (order.OrderStatus == OrderStatus.Ready || order.OrderStatus == OrderStatus.Served)
+                    return Results.Conflict("Cannot cancel an order that has already been served.");
+
+                order.OrderStatus = OrderStatus.Cancelled;
+                foreach (var item in order.OrderItems)
+                {
+                    if (item.OrderItemStatus != OrderItemStatus.Done &&
+                        item.OrderItemStatus != OrderItemStatus.Unavailable)
+                        item.OrderItemStatus = OrderItemStatus.Cancelled;
+                }
+
+                await db.SaveChangesAsync();
+                await hub.Clients.All.SendAsync("OrdersUpdated", order.SessionId);
+                return Results.NoContent();
+            }).RequireAuthorization("CashierOnly");
 
             // PATCH update order status — Kitchen advances Pending→Preparing→Ready
             orders.MapPatch("/{id:int}/status", async (
                 int id,
                 [FromBody] UpdateOrderStatusRequest request,
-                [FromServices] IDbContextFactory<AppDbContext> factory) =>
+                [FromServices] IDbContextFactory<AppDbContext> factory,
+                [FromServices] IHubContext<TableFlowHub> hub) =>
             {
                 await using var db = await factory.CreateDbContextAsync();
 
@@ -290,6 +357,7 @@ namespace TableFlow.Api.Endpoints
                 order.OrderStatus = newStatus;
                 await db.SaveChangesAsync();
 
+                await hub.Clients.All.SendAsync("OrdersUpdated", order.SessionId);
                 return Results.Ok(MapToResponse(order));
             }).RequireAuthorization("KitchenOnly");
 
@@ -297,11 +365,13 @@ namespace TableFlow.Api.Endpoints
             orders.MapPatch("/items/{id:int}/status", async (
                 int id,
                 [FromBody] UpdateOrderItemStatusRequest request,
-                [FromServices] IDbContextFactory<AppDbContext> factory) =>
+                [FromServices] IDbContextFactory<AppDbContext> factory,
+                [FromServices] IHubContext<TableFlowHub> hub) =>
             {
                 await using var db = await factory.CreateDbContextAsync();
 
                 var item = await db.OrderItems
+                    .Include(i => i.Order)
                     .Include(i => i.MenuItem)
                         .ThenInclude(m => m.MenuItemVarients)
                     .Include(i => i.Varient)
@@ -333,6 +403,7 @@ namespace TableFlow.Api.Endpoints
 
                 await db.SaveChangesAsync();
 
+                await hub.Clients.All.SendAsync("OrdersUpdated", item.Order.SessionId);
                 return Results.Ok(new OrderItemResponse(
                     item.Id,
                     item.OrderId,
@@ -352,8 +423,9 @@ namespace TableFlow.Api.Endpoints
         private static OrderResponse MapToResponse(Order order) => new(
             order.Id,
             order.SessionId,
-            order.TableSession.Table.TableNumber, // i add this to make it easier for the kitchen to see which table the order is for without having to look up the session
+            order.TableSession.Table.TableNumber,
             order.OrderNumber,
+            order.StationName,
             order.OrderStatus.ToString(),
             order.CreatedAt,
             order.Note,

@@ -25,6 +25,7 @@ public static class MenuEndpoints
                     c.Id,
                     c.CategoryName,
                     c.DisplayOrder,
+                    c.StationName,
                     c.MenuItems.Count))
                 .ToListAsync();
             return Results.Ok(categories);
@@ -37,7 +38,7 @@ public static class MenuEndpoints
                 .Include(c => c.MenuItems)
                 .FirstOrDefaultAsync(c => c.Id == id);
             if (c is null) return Results.NotFound();
-            return Results.Ok(new CategoryResponse(c.Id, c.CategoryName, c.DisplayOrder, c.MenuItems.Count));
+            return Results.Ok(new CategoryResponse(c.Id, c.CategoryName, c.DisplayOrder, c.StationName, c.MenuItems.Count));
         });
 
         menu.MapPost("/categories", async (CreateCategoryRequest req, [FromServices] IDbContextFactory<AppDbContext> factory) =>
@@ -53,14 +54,15 @@ public static class MenuEndpoints
             var category = new Category
             {
                 CategoryName = req.CategoryName,
-                DisplayOrder = req.DisplayOrder
+                DisplayOrder = req.DisplayOrder,
+                StationName = string.IsNullOrWhiteSpace(req.StationName) ? "Kitchen" : req.StationName
             };
 
             db.Categories.Add(category);
             await db.SaveChangesAsync();
 
             return Results.Created($"/api/menu/categories/{category.Id}",
-                new CategoryResponse(category.Id, category.CategoryName, category.DisplayOrder, 0));
+                new CategoryResponse(category.Id, category.CategoryName, category.DisplayOrder, category.StationName, 0));
         });
 
         menu.MapPut("/categories/{id:int}", async (int id, UpdateCategoryRequest req, [FromServices] IDbContextFactory<AppDbContext> factory) =>
@@ -80,9 +82,10 @@ public static class MenuEndpoints
 
             category.CategoryName = req.CategoryName;
             category.DisplayOrder = req.DisplayOrder;
+            category.StationName = string.IsNullOrWhiteSpace(req.StationName) ? "Kitchen" : req.StationName;
             await db.SaveChangesAsync();
 
-            return Results.Ok(new CategoryResponse(category.Id, category.CategoryName, category.DisplayOrder, 0));
+            return Results.Ok(new CategoryResponse(category.Id, category.CategoryName, category.DisplayOrder, category.StationName, 0));
         });
 
         menu.MapDelete("/categories/{id:int}", async (int id, [FromServices] IDbContextFactory<AppDbContext> factory) =>
@@ -236,6 +239,21 @@ public static class MenuEndpoints
             await using var db = await factory.CreateDbContextAsync();
             var item = await db.MenuItems.FindAsync(id);
             if (item is null) return Results.NotFound();
+
+            // Hard block: item is in an order on a table that is still open right now
+            var inActiveOrder = await db.OrderItems
+                .AnyAsync(oi => oi.MenuItemId == id &&
+                                oi.Order.TableSession.SessionStatus == SessionStatus.Open);
+            if (inActiveOrder)
+                return Results.Conflict("Cannot delete this item right now — it is part of an active order. Close the table's session first.");
+
+            // Historical order items (closed sessions) are cleaned up so the FK doesn't block.
+            // Session totals are already snapshotted on the closed session, so this is safe.
+            var historicalRefs = await db.OrderItems
+                .Where(oi => oi.MenuItemId == id)
+                .ToListAsync();
+            db.OrderItems.RemoveRange(historicalRefs);
+
             db.MenuItems.Remove(item);
             await db.SaveChangesAsync();
             return Results.NoContent();

@@ -25,7 +25,8 @@
             Confirmed,
             Preparing,
             Ready,
-            Served
+            Served,
+            Cancelled
         }
 
         public enum OrderItemStatus
@@ -34,7 +35,8 @@
             Preparing,
             Done,
             Unavailable,
-            Delivered
+            Delivered,
+            Cancelled
         }
     
 }

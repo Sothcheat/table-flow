@@ -12,6 +12,10 @@
             {
                 <span>Receipt — Table @TableNumber</span>
             }
+            else if (_state == DialogState.Warning)
+            {
+                <span>Pending Orders — Table @TableNumber</span>
+            }
             else
             {
                 <span>Close Session — Table @TableNumber</span>
@@ -29,12 +33,39 @@
                 <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="24px" Width="40%" Class="ml-auto" />
             </MudStack>
         }
+        else if (_state == DialogState.Warning)
+        {
+            @* ── Pending orders warning ────────────────────────────────── *@
+            <MudAlert Severity="MudBlazor.Severity.Warning" Class="mb-4">
+                These orders haven't been served yet. Cancel them to proceed, or keep the session open and wait.
+            </MudAlert>
+
+            <MudStack Spacing="2" Class="mb-2">
+                @foreach (var order in _pendingOrders)
+                {
+                    <MudPaper Elevation="1" Class="pa-3" Style="border-radius:8px; border-left:4px solid #F59E0B;">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1">
+                            <MudText Typo="Typo.body1" Style="font-weight:700;">@order.OrderNumber</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning">@order.OrderStatus</MudChip>
+                        </MudStack>
+                        @foreach (var item in order.Items)
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                @item.ItemName@(item.VarientName is not null ? $" ({item.VarientName})" : "") ×@item.Quantity
+                            </MudText>
+                        }
+                    </MudPaper>
+                }
+            </MudStack>
+        }
         else if (_state == DialogState.Review)
         {
             @* ── Bill summary ─────────────────────────────────────────── *@
             @if (_billLines.Count == 0)
             {
-                <MudText Color="Color.Secondary">No orders found for this session.</MudText>
+                <MudAlert Severity="MudBlazor.Severity.Info" Class="mb-4">
+                    No served items — total is $0.00.
+                </MudAlert>
             }
             else
             {
@@ -65,61 +96,64 @@
                 </MudStack>
             }
 
-            @* ── Payment method ───────────────────────────────────────── *@
-            <MudText Typo="Typo.subtitle1" Style="font-weight:600;" Class="mb-2">Payment Method</MudText>
-            <MudStack Row="true" Spacing="2" Class="mb-4">
-                <MudButton Variant="@(_paymentMethod == "Cash" ? Variant.Filled : Variant.Outlined)"
-                           Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Money"
-                           OnClick="@(() => { _paymentMethod = "Cash"; _amountStr = ""; })">
-                    Cash
-                </MudButton>
-                <MudButton Variant="@(_paymentMethod == "KHQR" ? Variant.Filled : Variant.Outlined)"
-                           Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.QrCode"
-                           OnClick="@(() => _paymentMethod = "KHQR")">
-                    KHQR
-                </MudButton>
-            </MudStack>
-
-            @* ── Cash received + change ───────────────────────────────── *@
-            @if (_paymentMethod == "Cash")
+            @* ── Payment method (skip if $0) ──────────────────────────── *@
+            @if (_grandTotal > 0)
             {
-                <MudTextField @bind-Value="_amountStr"
-                              Label="Amount Received ($)"
-                              Placeholder="0.00"
-                              InputType="InputType.Number"
-                              Adornment="Adornment.Start"
-                              AdornmentText="$"
-                              Variant="Variant.Outlined"
-                              Class="mb-3" />
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;" Class="mb-2">Payment Method</MudText>
+                <MudStack Row="true" Spacing="2" Class="mb-4">
+                    <MudButton Variant="@(_paymentMethod == "Cash" ? Variant.Filled : Variant.Outlined)"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Money"
+                               OnClick="@(() => { _paymentMethod = "Cash"; _amountStr = ""; })">
+                        Cash
+                    </MudButton>
+                    <MudButton Variant="@(_paymentMethod == "KHQR" ? Variant.Filled : Variant.Outlined)"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.QrCode"
+                               OnClick="@(() => _paymentMethod = "KHQR")">
+                        KHQR
+                    </MudButton>
+                </MudStack>
 
-                @if (_amountReceived > 0)
+                @* ── Cash received + change ───────────────────────────────── *@
+                @if (_paymentMethod == "Cash")
                 {
-                    @if (_amountReceived < _grandTotal)
+                    <MudTextField @bind-Value="_amountStr"
+                                  Label="Amount Received ($)"
+                                  Placeholder="0.00"
+                                  InputType="InputType.Number"
+                                  Adornment="Adornment.Start"
+                                  AdornmentText="$"
+                                  Variant="Variant.Outlined"
+                                  Class="mb-3" />
+
+                    @if (_amountReceived > 0)
                     {
-                        <MudAlert Severity="MudBlazor.Severity.Error" Dense="true" Class="mb-2">
-                            Amount received is less than the total. Short by $@((_grandTotal - _amountReceived).ToString("0.00")).
-                        </MudAlert>
-                    }
-                    else
-                    {
-                        <MudPaper Elevation="0" Class="pa-3 mb-2" Style="background:#F0FDF4; border:1px solid #86EFAC; border-radius:8px;">
-                            <MudStack Row="true" Justify="Justify.SpaceBetween">
-                                <MudText Style="font-weight:600; color:#15803D;">Change to give</MudText>
-                                <MudText Style="font-weight:800; font-size:1.2rem; color:#15803D;">
-                                    $@((_amountReceived - _grandTotal).ToString("0.00"))
-                                </MudText>
-                            </MudStack>
-                        </MudPaper>
+                        @if (_amountReceived < _grandTotal)
+                        {
+                            <MudAlert Severity="MudBlazor.Severity.Error" Dense="true" Class="mb-2">
+                                Amount received is less than the total. Short by $@((_grandTotal - _amountReceived).ToString("0.00")).
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <MudPaper Elevation="0" Class="pa-3 mb-2" Style="background:#F0FDF4; border:1px solid #86EFAC; border-radius:8px;">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                    <MudText Style="font-weight:600; color:#15803D;">Change to give</MudText>
+                                    <MudText Style="font-weight:800; font-size:1.2rem; color:#15803D;">
+                                        $@((_amountReceived - _grandTotal).ToString("0.00"))
+                                    </MudText>
+                                </MudStack>
+                            </MudPaper>
+                        }
                     }
                 }
-            }
-            else
-            {
-                <MudAlert Severity="MudBlazor.Severity.Info" Dense="true" Icon="@Icons.Material.Filled.QrCode">
-                    Ask the customer to scan and confirm payment of <strong>$@_grandTotal.ToString("0.00")</strong>, then click Confirm.
-                </MudAlert>
+                else if (_paymentMethod == "KHQR")
+                {
+                    <MudAlert Severity="MudBlazor.Severity.Info" Dense="true" Icon="@Icons.Material.Filled.QrCode">
+                        Ask the customer to scan and confirm payment of <strong>$@_grandTotal.ToString("0.00")</strong>, then click Confirm.
+                    </MudAlert>
+                }
             }
         }
         else if (_state == DialogState.Receipt)
@@ -132,22 +166,25 @@
                     <MudText Typo="Typo.body2" Color="Color.Secondary">@DateTime.Now.ToString("MMM d, yyyy — h:mm tt")</MudText>
                 </div>
 
-                <MudPaper Elevation="0" Class="pa-0 mb-3" Style="border:1px solid var(--mud-palette-lines-default); border-radius:8px; overflow:hidden;">
-                    <MudTable Items="_billLines" Dense="true" Hover="false" Elevation="0" T="BillLine">
-                        <HeaderContent>
-                            <MudTh>Item</MudTh>
-                            <MudTh Style="text-align:center">Qty</MudTh>
-                            <MudTh Style="text-align:right">Amount</MudTh>
-                        </HeaderContent>
-                        <RowTemplate Context="line">
-                            <MudTd>
-                                <MudText Typo="Typo.body2">@line.ItemName@(line.VarientName is not null ? $" ({line.VarientName})" : "")</MudText>
-                            </MudTd>
-                            <MudTd Style="text-align:center"><MudText Typo="Typo.body2">@line.Quantity</MudText></MudTd>
-                            <MudTd Style="text-align:right"><MudText Typo="Typo.body2">$@line.TotalPrice.ToString("0.00")</MudText></MudTd>
-                        </RowTemplate>
-                    </MudTable>
-                </MudPaper>
+                @if (_billLines.Count > 0)
+                {
+                    <MudPaper Elevation="0" Class="pa-0 mb-3" Style="border:1px solid var(--mud-palette-lines-default); border-radius:8px; overflow:hidden;">
+                        <MudTable Items="_billLines" Dense="true" Hover="false" Elevation="0" T="BillLine">
+                            <HeaderContent>
+                                <MudTh>Item</MudTh>
+                                <MudTh Style="text-align:center">Qty</MudTh>
+                                <MudTh Style="text-align:right">Amount</MudTh>
+                            </HeaderContent>
+                            <RowTemplate Context="line">
+                                <MudTd>
+                                    <MudText Typo="Typo.body2">@line.ItemName@(line.VarientName is not null ? $" ({line.VarientName})" : "")</MudText>
+                                </MudTd>
+                                <MudTd Style="text-align:center"><MudText Typo="Typo.body2">@line.Quantity</MudText></MudTd>
+                                <MudTd Style="text-align:right"><MudText Typo="Typo.body2">$@line.TotalPrice.ToString("0.00")</MudText></MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudPaper>
+                }
 
                 <div style="padding:0 4px;">
                     <MudDivider Class="mb-2" />
@@ -155,20 +192,23 @@
                         <MudText Typo="Typo.h6" Style="font-weight:700;">Total</MudText>
                         <MudText Typo="Typo.h6" Style="font-weight:700;">$@_grandTotal.ToString("0.00")</MudText>
                     </MudStack>
-                    <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-1">
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">Payment</MudText>
-                        <MudText Typo="Typo.body2">@_paymentMethod</MudText>
-                    </MudStack>
-                    @if (_paymentMethod == "Cash")
+                    @if (!string.IsNullOrEmpty(_paymentMethod))
                     {
                         <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-1">
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Received</MudText>
-                            <MudText Typo="Typo.body2">$@_amountReceived.ToString("0.00")</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Payment</MudText>
+                            <MudText Typo="Typo.body2">@_paymentMethod</MudText>
                         </MudStack>
-                        <MudStack Row="true" Justify="Justify.SpaceBetween">
-                            <MudText Typo="Typo.body2" Style="font-weight:700; color:#15803D;">Change</MudText>
-                            <MudText Typo="Typo.body2" Style="font-weight:700; color:#15803D;">$@((_amountReceived - _grandTotal).ToString("0.00"))</MudText>
-                        </MudStack>
+                        @if (_paymentMethod == "Cash")
+                        {
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-1">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">Received</MudText>
+                                <MudText Typo="Typo.body2">$@_amountReceived.ToString("0.00")</MudText>
+                            </MudStack>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2" Style="font-weight:700; color:#15803D;">Change</MudText>
+                                <MudText Typo="Typo.body2" Style="font-weight:700; color:#15803D;">$@((_amountReceived - _grandTotal).ToString("0.00"))</MudText>
+                            </MudStack>
+                        }
                     }
                     <MudDivider Class="mt-2 mb-3" />
                     <div style="text-align:center;">
@@ -180,7 +220,22 @@
     </DialogContent>
 
     <DialogActions>
-        @if (_state == DialogState.Review)
+        @if (_state == DialogState.Warning)
+        {
+            <MudButton OnClick="Cancel" Disabled="_cancelling">Keep Open</MudButton>
+            <MudButton Color="Color.Warning"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.Cancel"
+                       OnClick="CancelPendingAndProceedAsync"
+                       Disabled="_cancelling">
+                @if (_cancelling)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Cancel Pending &amp; Continue
+            </MudButton>
+        }
+        else if (_state == DialogState.Review)
         {
             <MudButton OnClick="Cancel" Disabled="_closing">Cancel</MudButton>
             <MudButton StartIcon="@Icons.Material.Filled.Print"
@@ -218,11 +273,12 @@
     [Parameter] public int SessionId { get; set; }
     [Parameter] public int TableNumber { get; set; }
 
-    private enum DialogState { Loading, Review, Receipt }
+    private enum DialogState { Loading, Warning, Review, Receipt }
     private record BillLine(string ItemName, string? VarientName, int Quantity, decimal TotalPrice);
 
     private DialogState _state = DialogState.Loading;
     private List<BillLine> _billLines = [];
+    private List<OrderModel> _pendingOrders = [];
     private decimal _grandTotal;
     private string _paymentMethod = "";
     private string _amountStr = "";
@@ -231,18 +287,40 @@
         System.Globalization.CultureInfo.InvariantCulture,
         out var d) ? Math.Max(0m, d) : 0m;
     private bool _closing;
+    private bool _cancelling;
 
-    private bool CanConfirm => _billLines.Count > 0 &&
-        !string.IsNullOrEmpty(_paymentMethod) &&
-        (_paymentMethod == "KHQR" || _amountReceived >= _grandTotal);
+    // $0 total: no payment needed. >$0: need method + correct amount.
+    private bool CanConfirm =>
+        _grandTotal == 0m ||
+        (!string.IsNullOrEmpty(_paymentMethod) &&
+         (_paymentMethod == "KHQR" || _amountReceived >= _grandTotal));
 
     protected override async Task OnInitializedAsync()
     {
         var orders = await OrderApiService.GetSessionOrdersAsync(SessionId);
 
+        _pendingOrders = orders
+            .Where(o => o.OrderStatus != "Ready" &&
+                        o.OrderStatus != "Served" &&
+                        o.OrderStatus != "Cancelled")
+            .ToList();
+
+        if (_pendingOrders.Any())
+        {
+            _state = DialogState.Warning;
+            return;
+        }
+
+        BuildBill(orders);
+        _state = DialogState.Review;
+    }
+
+    private void BuildBill(List<OrderModel> orders)
+    {
         _billLines = orders
+            .Where(o => o.OrderStatus == "Ready" || o.OrderStatus == "Served")
             .SelectMany(o => o.Items)
-            .Where(i => i.OrderItemStatus != "Unavailable")
+            .Where(i => i.OrderItemStatus != "Unavailable" && i.OrderItemStatus != "Cancelled")
             .GroupBy(i => (i.MenuItemId, i.VarientId))
             .Select(g => new BillLine(
                 g.First().ItemName,
@@ -251,17 +329,36 @@
                 g.Sum(i => i.TotalPrice)
             ))
             .ToList();
-
         _grandTotal = _billLines.Sum(l => l.TotalPrice);
+    }
 
+    private async Task CancelPendingAndProceedAsync()
+    {
+        _cancelling = true;
+        foreach (var order in _pendingOrders)
+        {
+            var (ok, error) = await OrderApiService.CancelOrderAsync(order.Id);
+            if (!ok)
+            {
+                Snackbar.Add($"Failed to cancel {order.OrderNumber}: {error}", MudBlazor.Severity.Error);
+                _cancelling = false;
+                return;
+            }
+        }
+
+        var refreshed = await OrderApiService.GetSessionOrdersAsync(SessionId);
+        BuildBill(refreshed);
+        _pendingOrders.Clear();
         _state = DialogState.Review;
+        _cancelling = false;
     }
 
     private async Task ConfirmCloseAsync()
     {
         _closing = true;
-        var received = _paymentMethod == "KHQR" ? _grandTotal : _amountReceived;
-        var (success, _, error) = await SessionApiService.CloseSessionAsync(SessionId, _paymentMethod, received);
+        var method = _grandTotal == 0m ? "Cash" : _paymentMethod;
+        var received = _grandTotal == 0m ? 0m : (_paymentMethod == "KHQR" ? _grandTotal : _amountReceived);
+        var (success, _, error) = await SessionApiService.CloseSessionAsync(SessionId, method, received);
         _closing = false;
 
         if (success)

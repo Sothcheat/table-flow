@@ -10,15 +10,18 @@ public class OrderApiService
     private readonly HttpClient _http;
     private readonly CustomAuthStateProvider _authProvider;
     private readonly UnauthorizedNotifier _notifier;
+    private readonly AppUpdateService _appUpdates;
 
     public OrderApiService(
         IHttpClientFactory httpClientFactory,
         AuthenticationStateProvider authProvider,
-        UnauthorizedNotifier notifier)
+        UnauthorizedNotifier notifier,
+        AppUpdateService appUpdates)
     {
         _http = httpClientFactory.CreateClient("TableFlowApi");
         _authProvider = (CustomAuthStateProvider)authProvider;
         _notifier = notifier;
+        _appUpdates = appUpdates;
     }
 
     private async Task AttachTokenAsync()
@@ -52,11 +55,12 @@ public class OrderApiService
 
     // ── ORDERS ───────────────────────────────────────────────────────
 
-    public async Task<(bool Success, OrderModel? Order, string Error)> PlaceOrderAsync(int sessionId, List<CartItem> items, string? note = null)
+    public async Task<(bool Success, List<OrderModel>? Orders, string Error)> PlaceOrderAsync(int sessionId, Guid tableToken, List<CartItem> items, string? note = null)
     {
         var request = new
         {
             SessionId = sessionId,
+            TableToken = tableToken,
             Note = note,
             Items = items.Select(i => new
             {
@@ -67,12 +71,12 @@ public class OrderApiService
             }).ToList()
         };
 
-        // No token needed — AllowAnonymous for now
         var res = await _http.PostAsJsonAsync("/api/orders", request);
         if (res.IsSuccessStatusCode)
         {
-            var order = await res.Content.ReadFromJsonAsync<OrderModel>();
-            return (true, order, "");
+            var orders = await res.Content.ReadFromJsonAsync<List<OrderModel>>();
+            _appUpdates.BroadcastOrdersUpdated(sessionId);
+            return (true, orders, "");
         }
         var error = await res.Content.ReadAsStringAsync();
         return (false, null, error);
@@ -143,12 +147,29 @@ public class OrderApiService
         }
     }
 
+    public async Task<(bool Success, string Error)> CancelOrderAsync(int orderId)
+    {
+        await AttachTokenAsync();
+        var res = await _http.PatchAsJsonAsync($"/api/orders/{orderId}/cancel", new { });
+        if (await CheckUnauthorizedAsync(res)) return (false, "Unauthorized");
+        if (res.IsSuccessStatusCode)
+        {
+            _appUpdates.BroadcastOrdersUpdated(-1);
+            return (true, "");
+        }
+        var error = await res.Content.ReadAsStringAsync();
+        return (false, error);
+    }
+
     public async Task<bool> UpdateOrderStatusAsync(int orderId, string status)
     {
         await AttachTokenAsync();
         var res = await _http.PatchAsJsonAsync($"/api/orders/{orderId}/status", new { Status = status });
         if (await CheckUnauthorizedAsync(res)) return false;
-        return res.IsSuccessStatusCode;
+        if (!res.IsSuccessStatusCode) return false;
+        var order = await res.Content.ReadFromJsonAsync<OrderModel>();
+        _appUpdates.BroadcastOrdersUpdated(order?.SessionId ?? -1);
+        return true;
     }
 
     public async Task<bool> UpdateOrderItemStatusAsync(int itemId, string status)
@@ -156,7 +177,9 @@ public class OrderApiService
         await AttachTokenAsync();
         var res = await _http.PatchAsJsonAsync($"/api/orders/items/{itemId}/status", new { Status = status });
         if (await CheckUnauthorizedAsync(res)) return false;
-        return res.IsSuccessStatusCode;
+        if (!res.IsSuccessStatusCode) return false;
+        _appUpdates.BroadcastOrdersUpdated(-1); // sessionId unknown from item response — broadcast all
+        return true;
     }
 
 

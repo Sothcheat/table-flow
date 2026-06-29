@@ -1,6 +1,7 @@
 ﻿using FluentValidation;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -77,6 +78,8 @@ builder.Services.AddHttpClient("TableFlowApi", client =>
 
 builder.Services.AddSingleton<IValidator<LoginModel>, LoginValidator>();
 
+builder.Services.AddSingleton<AppUpdateService>();
+
 builder.Services.AddScoped<UnauthorizedNotifier>();
 
 builder.Services.AddScoped<UserApiService>();
@@ -95,11 +98,16 @@ builder.Services.AddScoped<UserFormValidator>();
 
 var app = builder.Build();
 
+// Trust reverse proxy headers (Railway, nginx, etc.) so HTTPS redirect works correctly
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 // app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);

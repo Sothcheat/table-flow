@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TableFlow.Api.Data;
 using TableFlow.Api.Data.Entities;
 using TableFlow.Api.DTOs;
+using TableFlow.Api.Hubs;
 
 namespace TableFlow.Api.Endpoints
 {
@@ -216,12 +218,13 @@ namespace TableFlow.Api.Endpoints
                     table.TableNumber,
                     session is not null,
                     session?.Id));
-            }).AllowAnonymous();
+            }).AllowAnonymous().RequireRateLimiting("anonymous");
 
             // POST open session — Cashier only
             sessions.MapPost("/", async (
                 [FromBody] CreateSessionRequest request,
                 [FromServices] IDbContextFactory<AppDbContext> factory,
+                [FromServices] IHubContext<TableFlowHub> hub,
                 ClaimsPrincipal user) =>
             {
 
@@ -271,7 +274,39 @@ namespace TableFlow.Api.Endpoints
                 await db.Entry(session).Reference(s => s.Table).LoadAsync();
                 await db.Entry(session).Reference(s => s.CreatedBy).LoadAsync();
 
+                await hub.Clients.All.SendAsync("SessionOpened", table.PublicToken.ToString(), session.Id, table.TableNumber);
                 return Results.Created($"/api/sessions/{session.Id}", MapToResponse(session));
+            }).RequireAuthorization("CashierOnly");
+
+            // PATCH cancel session — any Cashier (no payment, zero-order sessions only)
+            sessions.MapPatch("/{id:int}/cancel", async (
+                int id,
+                [FromServices] IDbContextFactory<AppDbContext> factory,
+                [FromServices] IHubContext<TableFlowHub> hub) =>
+            {
+                await using var db = await factory.CreateDbContextAsync();
+
+                var session = await db.TableSessions
+                    .Include(s => s.Table)
+                    .FirstOrDefaultAsync(s => s.Id == id);
+
+                if (session is null) return Results.NotFound();
+                if (session.SessionStatus == SessionStatus.Closed)
+                    return Results.Conflict("Session is already closed.");
+
+                var hasOrders = await db.Orders.AnyAsync(o => o.SessionId == id);
+                if (hasOrders)
+                    return Results.Conflict("Session has orders — use the close flow to collect payment.");
+
+                session.SessionStatus = SessionStatus.Closed;
+                session.ClosedAt = DateTime.UtcNow;
+                session.TotalAmount = 0;
+                session.Table.TableStatus = TableStatus.Available;
+
+                await db.SaveChangesAsync();
+
+                await hub.Clients.All.SendAsync("SessionClosed", id);
+                return Results.NoContent();
             }).RequireAuthorization("CashierOnly");
 
             // PATCH close session — Cashier only
@@ -279,6 +314,7 @@ namespace TableFlow.Api.Endpoints
                 int id,
                 [FromBody] CloseSessionRequest request,
                 [FromServices] IDbContextFactory<AppDbContext> factory,
+                [FromServices] IHubContext<TableFlowHub> hub,
                 ClaimsPrincipal user) =>
             {
                 await using var db = await factory.CreateDbContextAsync();
@@ -301,9 +337,28 @@ namespace TableFlow.Api.Endpoints
                 if (!Enum.TryParse<PaymentMethod>(request.PaymentMethod, ignoreCase: true, out var paymentMethod))
                     return Results.BadRequest("Invalid payment method.");
 
-                // Calculate total from all order items
+                // Auto-cancel any orders that never reached the kitchen or are still being prepared
+                // (covers customer-walks-out and close-with-pending scenarios)
+                foreach (var order in session.Orders.Where(o =>
+                    o.OrderStatus == OrderStatus.Pending ||
+                    o.OrderStatus == OrderStatus.Confirmed ||
+                    o.OrderStatus == OrderStatus.Preparing))
+                {
+                    order.OrderStatus = OrderStatus.Cancelled;
+                    foreach (var item in order.OrderItems.Where(i =>
+                        i.OrderItemStatus != OrderItemStatus.Done &&
+                        i.OrderItemStatus != OrderItemStatus.Unavailable))
+                    {
+                        item.OrderItemStatus = OrderItemStatus.Cancelled;
+                    }
+                }
+
+                // Bill only what was actually served (Ready orders), excluding unavailable/cancelled items
                 var total = session.Orders
+                    .Where(o => o.OrderStatus == OrderStatus.Ready)
                     .SelectMany(o => o.OrderItems)
+                    .Where(i => i.OrderItemStatus != OrderItemStatus.Unavailable &&
+                                i.OrderItemStatus != OrderItemStatus.Cancelled)
                     .Sum(i => i.UnitPrice * i.Quantity);
 
                 session.SessionStatus = SessionStatus.Closed;
@@ -312,7 +367,7 @@ namespace TableFlow.Api.Endpoints
                 session.TotalAmount = total;
                 session.AmountReceived = request.AmountReceived;
 
-                // Advance any Ready orders to Served — session close is the terminal event
+                // Advance Ready orders to Served — session close is the terminal event
                 foreach (var order in session.Orders.Where(o => o.OrderStatus == OrderStatus.Ready))
                     order.OrderStatus = OrderStatus.Served;
 
@@ -321,6 +376,7 @@ namespace TableFlow.Api.Endpoints
 
                 await db.SaveChangesAsync();
 
+                await hub.Clients.All.SendAsync("SessionClosed", id);
                 return Results.Ok(MapToResponse(session));
             }).RequireAuthorization("CashierOnly");
         }

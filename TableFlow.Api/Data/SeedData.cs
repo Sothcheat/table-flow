@@ -34,9 +34,9 @@ namespace TableFlow.Api.Data
             if (!await db.Categories.AnyAsync())
             {
                 db.Categories.AddRange(
-                    new Category { CategoryName = "Food", DisplayOrder = 1 },
-                    new Category { CategoryName = "Drinks", DisplayOrder = 2 },
-                    new Category { CategoryName = "Desserts", DisplayOrder = 3 }
+                    new Category { CategoryName = "Food", DisplayOrder = 1, StationName = "Kitchen" },
+                    new Category { CategoryName = "Drinks", DisplayOrder = 2, StationName = "Bar" },
+                    new Category { CategoryName = "Desserts", DisplayOrder = 3, StationName = "Kitchen" }
                 );
                 await db.SaveChangesAsync();
             }

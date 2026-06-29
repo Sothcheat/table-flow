@@ -5,6 +5,7 @@
 @inject CartService CartService
 @inject MenuApiService MenuApiService
 @inject SessionApiService SessionApiService
+@inject AppUpdateService AppUpdates
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @layout EmptyLayout
@@ -233,6 +234,7 @@ else
         <CartDrawer @ref="_cartDrawer"
                     @bind-Open="_cartOpen"
                     SessionId="@(_resolvedSessionId ?? 0)"
+                    TableToken="@TableToken"
                     OnOrderPlaced="OnOrderPlaced" />
 
     </div>
@@ -255,15 +257,37 @@ else
     private MenuSessionState _state = MenuSessionState.Loading;
     private int _tableNumber;
     private int? _resolvedSessionId;
-    private System.Threading.Timer? _waitTimer;
-    private System.Threading.Timer? _validityTimer;
 
     protected override void OnInitialized()
     {
         CartService.OnCartChanged += OnCartChanged;
+        AppUpdates.SessionOpened += OnSessionOpened;
+        AppUpdates.SessionClosed += OnSessionClosed;
     }
 
     private void OnCartChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnSessionOpened(int tableNumber, int sessionId)
+    {
+        if (_state != MenuSessionState.Waiting || tableNumber != _tableNumber) return;
+        try { InvokeAsync(async () => await ActivateSessionAsync(sessionId)); }
+        catch (ObjectDisposedException) { AppUpdates.SessionOpened -= OnSessionOpened; }
+    }
+
+    private void OnSessionClosed(int sessionId)
+    {
+        if (_state != MenuSessionState.Active || sessionId != _resolvedSessionId) return;
+        try
+        {
+            InvokeAsync(() =>
+            {
+                _state = MenuSessionState.Ended;
+                StateHasChanged();
+                return Task.CompletedTask;
+            });
+        }
+        catch (ObjectDisposedException) { AppUpdates.SessionClosed -= OnSessionClosed; }
+    }
 
     [SupplyParameterFromQuery(Name = "t")]
     public Guid? TableToken { get; set; }
@@ -292,7 +316,7 @@ else
             EnterWaitingState();
     }
 
-    // Open session found — load the item and watch for the session closing.
+    // Open session found — load the item. Real-time session-close handled by OnSessionClosed.
     private async Task ActivateSessionAsync(int sessionId)
     {
         _resolvedSessionId = sessionId;
@@ -303,59 +327,14 @@ else
         _item = await MenuApiService.GetMenuItemByIdAsync(Id);
         _loading = false;
 
-        StartValidityPolling();
         StateHasChanged();
     }
 
-    // No open session yet — poll until the cashier opens one, then activate.
+    // No open session yet — set waiting state. Real-time open handled by OnSessionOpened.
     private void EnterWaitingState()
     {
         _state = MenuSessionState.Waiting;
-        _waitTimer?.Dispose();
-        _waitTimer = new System.Threading.Timer(async _ =>
-        {
-            await InvokeAsync(async () =>
-            {
-                var resolved = await SessionApiService.ResolveTableTokenAsync(TableToken!.Value);
-                if (resolved is null)
-                {
-                    _waitTimer?.Dispose();
-                    _waitTimer = null;
-                    _state = MenuSessionState.InvalidToken;
-                    StateHasChanged();
-                    return;
-                }
-
-                _tableNumber = resolved.TableNumber;
-                if (resolved.IsOpen && resolved.SessionId is int sessionId)
-                {
-                    _waitTimer?.Dispose();
-                    _waitTimer = null;
-                    await ActivateSessionAsync(sessionId);
-                }
-            });
-        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
-    }
-
-    // Detect the cashier closing the session while browsing → "ended" screen.
-    private void StartValidityPolling()
-    {
-        _validityTimer?.Dispose();
-        _validityTimer = new System.Threading.Timer(async _ =>
-        {
-            await InvokeAsync(async () =>
-            {
-                if (_resolvedSessionId is not int sessionId) return;
-                var stillOpen = await SessionApiService.IsSessionActiveAsync(sessionId);
-                if (!stillOpen)
-                {
-                    _validityTimer?.Dispose();
-                    _validityTimer = null;
-                    _state = MenuSessionState.Ended;
-                    StateHasChanged();
-                }
-            });
-        }, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+        StateHasChanged();
     }
 
     private void SelectVariant(VarientModel variant)
@@ -399,7 +378,7 @@ else
     public void Dispose()
     {
         CartService.OnCartChanged -= OnCartChanged;
-        _waitTimer?.Dispose();
-        _validityTimer?.Dispose();
+        AppUpdates.SessionOpened -= OnSessionOpened;
+        AppUpdates.SessionClosed -= OnSessionClosed;
     }
 }

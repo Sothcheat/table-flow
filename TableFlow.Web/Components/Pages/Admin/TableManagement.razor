@@ -68,6 +68,8 @@ else
                     <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                    Color="Color.Error"
                                    Size="Size.Small"
+                                   Disabled="@(context.Status == "Occupied")"
+                                   Title="@(context.Status == "Occupied" ? "Table is occupied — close the session first" : "Delete table")"
                                    OnClick="@(() => DeleteTable(context))" />
                 }
             </MudTd>
@@ -169,6 +171,12 @@ else
 
     private async Task DeleteTable(TableModel table)
     {
+        if (table.Status == "Occupied")
+        {
+            Snackbar.Add($"Table {table.TableNumber} is currently occupied. Close the session before deleting.", MudBlazor.Severity.Warning);
+            return;
+        }
+
         var confirmed = await DialogService.ShowMessageBoxAsync(
             "Delete Table",
             $"Are you sure you want to delete Table {table.TableNumber}?",

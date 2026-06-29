@@ -28,6 +28,15 @@
                                  Error="@(_errors.ContainsKey("DisplayOrder"))"
                                  ErrorText="@(_errors.GetValueOrDefault("DisplayOrder"))" />
             </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_form.StationName"
+                              Label="Station"
+                              HelperText="e.g. Kitchen, Bar"
+                              Variant="Variant.Outlined"
+                              FullWidth="true"
+                              Error="@(_errors.ContainsKey("StationName"))"
+                              ErrorText="@(_errors.GetValueOrDefault("StationName"))" />
+            </MudItem>
         </MudGrid>
     </DialogContent>
     <DialogActions>
@@ -59,6 +68,7 @@
         {
             _form.CategoryName = Category.CategoryName;
             _form.DisplayOrder = Category.DisplayOrder;
+            _form.StationName = Category.StationName;
         } else
         {
             _form.DisplayOrder = NextDisplayOrder;
@@ -72,6 +82,8 @@
             _errors["CategoryName"] = "Category name is required.";
         if (_form.DisplayOrder < 0)
             _errors["DisplayOrder"] = "Display order must be 0 or greater.";
+        if (string.IsNullOrWhiteSpace(_form.StationName))
+            _errors["StationName"] = "Station is required (e.g. Kitchen, Bar).";
         return _errors.Count == 0;
     }
 

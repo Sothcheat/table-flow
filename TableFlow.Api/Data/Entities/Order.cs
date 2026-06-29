@@ -7,6 +7,7 @@
         public TableSession TableSession { get; set; } = null!;
 
         public string OrderNumber { get; set; } = string.Empty;
+        public string StationName { get; set; } = "Kitchen";
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public OrderStatus OrderStatus { get; set; } = OrderStatus.Pending;
         public string? Note { get; set; }
