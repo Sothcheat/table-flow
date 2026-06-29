@@ -1,5 +1,6 @@
 @using TableFlow.Web.Models
 @using TableFlow.Web.Services
+@using Microsoft.JSInterop
 @inject OrderApiService OrderApiService
 @inject SessionApiService SessionApiService
 @inject ISnackbar Snackbar
@@ -373,7 +374,32 @@
 
     private async Task PrintAsync()
     {
-        await JS.InvokeVoidAsync("window.print");
+        var change = _paymentMethod == "Cash" ? Math.Max(0m, _amountReceived - _grandTotal) : 0m;
+        var data = new
+        {
+            tableNumber = TableNumber,
+            dateTime = DateTime.Now.ToString("MMM d, yyyy — h:mm tt"),
+            lines = _billLines.Select(l => new
+            {
+                itemName    = l.ItemName,
+                varientName = l.VarientName,
+                quantity    = l.Quantity,
+                totalPrice  = (double)l.TotalPrice
+            }).ToList(),
+            grandTotal     = (double)_grandTotal,
+            paymentMethod  = _paymentMethod,
+            amountReceived = (double)_amountReceived,
+            change         = (double)change
+        };
+
+        try
+        {
+            await JS.InvokeVoidAsync("printReceipt", data);
+        }
+        catch (Exception ex) when (ex is JSDisconnectedException or TaskCanceledException or OperationCanceledException)
+        {
+            // Print popup was blocked or closed — not an error
+        }
     }
 
     private void Done() => MudDialog.Close(DialogResult.Ok(true));
