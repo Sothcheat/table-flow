@@ -206,6 +206,7 @@
     private KitchenHistoryPanel? _historyPanel;
 
     private string _stationFilter = "All";
+    private System.Timers.Timer? _clockTimer;
 
     private List<OrderModel> FilteredOrders =>
         _stationFilter == "All" ? _orders : _orders.Where(o => o.StationName == _stationFilter).ToList();
@@ -217,6 +218,15 @@
     {
         AppUpdates.OrdersUpdated += OnOrdersUpdated;
         await LoadOrdersAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender) return;
+        _clockTimer = new System.Timers.Timer(30_000);
+        _clockTimer.Elapsed += async (_, _) => await InvokeAsync(StateHasChanged);
+        _clockTimer.AutoReset = true;
+        _clockTimer.Start();
     }
 
     private void OnOrdersUpdated(int sessionId)
@@ -365,6 +375,8 @@
 
     public void Dispose()
     {
+        _clockTimer?.Stop();
+        _clockTimer?.Dispose();
         AppUpdates.OrdersUpdated -= OnOrdersUpdated;
     }
 }

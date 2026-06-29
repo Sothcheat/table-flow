@@ -63,7 +63,7 @@
                     <div>
                         @foreach (var item in order.Items)
                         {
-                            var (label, bg) = GetStatusDisplay(item.OrderItemStatus);
+                            var (label, bg) = GetStatusDisplay(order.OrderStatus, item.OrderItemStatus);
                             <div style="display:flex; align-items:center; padding:10px 16px; border-bottom:1px solid rgba(0,0,0,0.04); gap:12px;">
                                 <div style="flex:1; min-width:0;">
                                     <MudText Typo="Typo.body2" Style="font-weight:600; color:#1E293B;">@item.ItemName</MudText>
@@ -135,15 +135,23 @@
         _           => "#94A3B8"
     };
 
-    private static (string Label, string Color) GetStatusDisplay(string status) => status switch
+    // Item status chips derive from order status so old data (Waiting items in a Ready order)
+    // still shows correctly. Only Unavailable and Cancelled break out of this.
+    private static (string Label, string Color) GetStatusDisplay(string orderStatus, string itemStatus)
     {
-        "Waiting"     => ("Pending",     "#94A3B8"),
-        "Preparing"   => ("Preparing",   "#F59E0B"),
-        "Done"        => ("Ready",       "#3B82F6"),
-        "Delivered"   => ("Delivered",   "#0D6B63"),
-        "Unavailable" => ("Unavailable", "#EF4444"),
-        _             => (status,        "#94A3B8")
-    };
+        if (itemStatus == "Unavailable") return ("Unavailable", "#EF4444");
+        if (itemStatus == "Cancelled")   return ("Cancelled",   "#94A3B8");
+
+        return orderStatus switch
+        {
+            "Pending"   => ("Pending",   "#94A3B8"),
+            "Preparing" => ("Preparing", "#F59E0B"),
+            "Ready"     => ("Ready",     "#22C55E"),
+            "Served"    => ("Served",    "#0D6B63"),
+            "Cancelled" => ("Cancelled", "#94A3B8"),
+            _           => (itemStatus,  "#94A3B8")
+        };
+    }
 
     public void Dispose() => AppUpdates.OrdersUpdated -= OnOrdersUpdated;
 }

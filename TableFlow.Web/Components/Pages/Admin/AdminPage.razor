@@ -4,6 +4,8 @@
 @using TableFlow.Web.Services
 @inject NavigationManager Navigation
 @inject SessionApiService SessionApiService
+@inject AppUpdateService AppUpdates
+@implements IDisposable
 
 <PageTitle>Admin — TableFlow</PageTitle>
 
@@ -159,11 +161,33 @@ else if (_stats is not null)
             new(Icons.Material.Filled.RestaurantMenu,"Menu Management",   "Manage categories & menu items",     () => Navigation.NavigateTo("/admin/menu")),
             new(Icons.Material.Filled.TableRestaurant,"Table Management", "Configure restaurant tables",        () => Navigation.NavigateTo("/admin/tables")),
         ];
+
+        AppUpdates.SessionOpened += OnSessionChanged;
+        AppUpdates.SessionClosed += OnSessionClosed;
     }
 
     protected override async Task OnInitializedAsync()
     {
         _stats = await SessionApiService.GetSessionStatsAsync();
         _statsLoading = false;
+    }
+
+    private async void OnSessionChanged(int tableNumber, int sessionId) => await RefreshStatsAsync();
+    private async void OnSessionClosed(int sessionId) => await RefreshStatsAsync();
+
+    private async Task RefreshStatsAsync()
+    {
+        var updated = await SessionApiService.GetSessionStatsAsync();
+        await InvokeAsync(() =>
+        {
+            _stats = updated;
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        AppUpdates.SessionOpened -= OnSessionChanged;
+        AppUpdates.SessionClosed -= OnSessionClosed;
     }
 }
