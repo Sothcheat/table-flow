@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -96,7 +97,13 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-if(!app.Environment.IsDevelopment())
+// Trust reverse proxy headers (Railway, nginx, etc.) so HTTPS redirect works correctly
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
+if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 app.UseCors("AllowBlazor");
 app.UseAuthentication();

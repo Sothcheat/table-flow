@@ -10,7 +10,46 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - tableflow_data_18:/var/lib/postgresql
+      - tableflow_data_18:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: tableflow_api
+    restart: always
+    ports:
+      - "5009:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=postgres;Username=postgres;Password=postgres;Database=tableflow;Port=5432"
+      Jwt__Key: "tableflow-super-secret-key-at-least-32-chars!!"
+      Jwt__Issuer: "tableflow-api"
+      Jwt__Audience: "tableflow-web"
+      AllowedOrigins: "http://localhost:7261"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: tableflow_web
+    restart: always
+    ports:
+      - "7261:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=postgres;Username=postgres;Password=postgres;Database=tableflow;Port=5432"
+      ApiBaseUrl: "http://api:8080"
+    depends_on:
+      - api
 
 volumes:
   tableflow_data_18:
