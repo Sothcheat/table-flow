@@ -69,12 +69,12 @@
 
 @if (_loading)
 {
-    <MudPaper Elevation="0" Class="pa-4" Style="border:1px solid var(--mud-palette-lines-default);">
-        @for (int i = 0; i < 4; i++)
+    <MudStack Spacing="2">
+        @for (int i = 0; i < 5; i++)
         {
-            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="60px" Class="mb-3" />
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="64px" Class="rounded" />
         }
-    </MudPaper>
+    </MudStack>
 }
 else if (_sessions.Count == 0)
 {
@@ -88,82 +88,123 @@ else if (_sessions.Count == 0)
 }
 else
 {
-    <MudStack Spacing="4">
+    <MudExpansionPanels MultiExpansion="true" Elevation="0"
+                        Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09); overflow:hidden;">
         @foreach (var session in _sessions)
         {
-            <MudPaper Elevation="0" Style="border:1px solid var(--mud-palette-lines-default); overflow:hidden;">
+            var hasReady = session.Orders.Any(o => o.OrderStatus == "Ready");
+            var stripColor = hasReady ? "#22C55E" : "#0D6B63";
 
-                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center"
-                          Class="pa-4" Style="background-color:var(--mud-palette-background);">
-                    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
-                        <MudIcon Icon="@Icons.Material.Filled.TableRestaurant" Color="Color.Primary" />
-                        <MudText Typo="Typo.h6">Table @session.TableNumber</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">Session #@session.SessionId</MudText>
-                    </MudStack>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">
-                        @session.Orders.Count order@(session.Orders.Count == 1 ? "" : "s")
-                        &middot; first order @session.FirstOrderAt.ToLocalTime().ToString("MMM d, h:mm tt")
-                    </MudText>
-                </MudStack>
+            <MudExpansionPanel @key="session.SessionId">
+                <TitleContent>
+                    <div style="display:flex; align-items:center; gap:16px; width:100%; padding:4px 8px 4px 0;">
 
-                <MudDivider />
+                        @* Status strip *@
+                        <div style="width:4px; height:44px; border-radius:4px; flex-shrink:0; background:@stripColor;"></div>
 
-                <MudTable Items="session.Orders" Hover="true" Dense="false" Elevation="0" Style="table-layout:fixed;">
-                    <HeaderContent>
-                        <MudTh Style="width:160px">Order #</MudTh>
-                        <MudTh>Items</MudTh>
-                        <MudTh Style="width:120px">Received</MudTh>
-                        <MudTh Style="width:130px">Status</MudTh>
-                        <MudTh Style="width:52px"></MudTh>
-                    </HeaderContent>
-                    <RowTemplate Context="order">
-                        <MudTd Style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@order.OrderNumber</MudTd>
-                        <MudTd Style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@GetCondensedItems(order)</MudTd>
-                        <MudTd>@order.CreatedAt.ToLocalTime().ToString("h:mm tt")</MudTd>
-                        <MudTd>
-                            <MudChip T="string" Color="@GetStatusColor(order.OrderStatus)" Size="Size.Small">
-                                @order.OrderStatus
-                            </MudChip>
-                        </MudTd>
-                        <MudTd>
-                            <MudIconButton Icon="@(_expandedIds.Contains(order.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
-                                           Size="Size.Small"
-                                           OnClick="@(() => ToggleExpand(order.Id))" />
-                        </MudTd>
-                    </RowTemplate>
-                    <ChildRowContent Context="order">
-                        @if (_expandedIds.Contains(order.Id))
-                        {
-                            <MudTr>
-                                <MudTd colspan="5" Class="pa-0">
-                                    <MudPaper Elevation="0" Class="pa-4 ma-2"
-                                              Style="background-color:var(--mud-palette-background); border:1px solid var(--mud-palette-lines-default);">
-                                        <MudStack Spacing="1">
-                                            @foreach (var item in order.Items)
-                                            {
-                                                <MudStack Row="true" Justify="Justify.SpaceBetween">
-                                                    <MudText Typo="Typo.body2">
-                                                        @item.Quantity &times; @item.ItemName@(item.VarientName is not null ? $" ({item.VarientName})" : "")
-                                                    </MudText>
-                                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@item.TotalPrice.ToString("C")</MudText>
-                                                </MudStack>
-                                            }
-                                            @if (!string.IsNullOrWhiteSpace(order.Note))
-                                            {
-                                                <MudAlert Severity="MudBlazor.Severity.Info" Dense="true" Variant="Variant.Outlined" Class="mt-2">
-                                                    @order.Note
-                                                </MudAlert>
-                                            }
-                                        </MudStack>
-                                    </MudPaper>
-                                </MudTd>
-                            </MudTr>
-                        }
-                    </ChildRowContent>
-                </MudTable>
-            </MudPaper>
+                        @* Table + session *@
+                        <div style="min-width:140px; flex-shrink:0;">
+                            <div style="font-weight:700; font-size:0.9rem; color:#0D6B63;">Table @session.TableNumber</div>
+                            <div style="font-size:0.75rem; color:#475569; margin-top:2px;">Session #@session.SessionId</div>
+                        </div>
+
+                        @* First order time *@
+                        <div style="flex:1;">
+                            <div style="font-size:0.75rem; color:#475569;">
+                                @session.FirstOrderAt.ToLocalTime().ToString("MMM d, h:mm tt")
+                            </div>
+                        </div>
+
+                        @* Order count *@
+                        <div style="font-size:0.8rem; color:#64748B; flex-shrink:0; padding-right:4px;">
+                            @session.Orders.Count order@(session.Orders.Count == 1 ? "" : "s")
+                        </div>
+                    </div>
+                </TitleContent>
+
+                <ChildContent>
+                    <MudDivider />
+                    <div style="padding:16px;">
+                        <MudStack Spacing="2">
+                            @foreach (var order in session.Orders)
+                            {
+                                <MudPaper Elevation="0" Style="border-radius:8px; border:1px solid rgba(0,0,0,0.09);">
+
+                                    @* Order header *@
+                                    <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#F8FAFC; border-radius:8px 8px 0 0; border-bottom:1px solid rgba(0,0,0,0.07);">
+                                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                            <span style="font-size:0.875rem; font-weight:700; color:#1E293B;">@order.OrderNumber</span>
+                                            <span style="font-size:0.62rem; font-weight:700; background:#0D6B63; color:white; border-radius:100px; padding:2px 7px; flex-shrink:0;">@order.StationName</span>
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="@GetStatusColor(order.OrderStatus)"
+                                                     Variant="Variant.Filled"
+                                                     Style="font-size:0.68rem; height:20px;">
+                                                @order.OrderStatus
+                                            </MudChip>
+                                        </div>
+                                        <span style="font-size:0.75rem; color:#475569; flex-shrink:0;">
+                                            @order.CreatedAt.ToLocalTime().ToString("h:mm tt")
+                                        </span>
+                                    </div>
+
+                                    @* Order items *@
+                                    <div style="padding:8px 14px 0;">
+                                        @foreach (var item in order.Items)
+                                        {
+                                            var dimmed = item.OrderItemStatus == "Unavailable" || item.OrderItemStatus == "Cancelled";
+                                            <div style="display:flex; align-items:baseline; padding:6px 0; border-bottom:1px solid rgba(0,0,0,0.05);">
+                                                <div style="flex:1; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                                                    <span style="font-size:0.875rem; font-weight:500;
+                                                                 color:@(dimmed ? "#94A3B8" : "#1E293B");
+                                                                 text-decoration:@(dimmed ? "line-through" : "none");">
+                                                        @item.ItemName
+                                                    </span>
+                                                    @if (!string.IsNullOrEmpty(item.VarientName))
+                                                    {
+                                                        <span style="font-size:0.75rem; color:#6366F1; font-weight:500;">@item.VarientName</span>
+                                                    }
+                                                    @if (item.OrderItemStatus == "Unavailable")
+                                                    {
+                                                        <span style="font-size:0.6rem; font-weight:700; background:#EF4444; color:white; border-radius:100px; padding:1px 6px;">OUT</span>
+                                                    }
+                                                    else if (item.OrderItemStatus == "Cancelled")
+                                                    {
+                                                        <span style="font-size:0.6rem; font-weight:700; background:#94A3B8; color:white; border-radius:100px; padding:1px 6px;">VOID</span>
+                                                    }
+                                                </div>
+                                                <div style="font-size:0.8rem; color:#475569; width:36px; text-align:center; font-weight:600; flex-shrink:0;">×@item.Quantity</div>
+                                                <div style="font-size:0.8rem; color:#475569; width:60px; text-align:right; flex-shrink:0;">$@item.UnitPrice.ToString("0.00")</div>
+                                                <div style="font-size:0.875rem; font-weight:700; width:68px; text-align:right; flex-shrink:0;
+                                                            color:@(dimmed ? "#94A3B8" : "#0D6B63");">
+                                                    $@item.TotalPrice.ToString("0.00")
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @* Note *@
+                                    @if (!string.IsNullOrWhiteSpace(order.Note))
+                                    {
+                                        <div style="padding:8px 14px;">
+                                            <MudAlert Severity="MudBlazor.Severity.Info" Dense="true" Variant="Variant.Outlined">
+                                                @order.Note
+                                            </MudAlert>
+                                        </div>
+                                    }
+
+                                    @* Order footer *@
+                                    <div style="display:flex; justify-content:flex-end; align-items:center; padding:8px 14px; background:#F8FAFC; border-radius:0 0 8px 8px; border-top:1px solid rgba(0,0,0,0.05); gap:8px;">
+                                        <span style="font-size:0.78rem; color:#475569;">Order total</span>
+                                        <span style="font-size:1rem; font-weight:700; color:#1E293B;">$@order.OrderTotal.ToString("0.00")</span>
+                                    </div>
+                                </MudPaper>
+                            }
+                        </MudStack>
+                    </div>
+                </ChildContent>
+            </MudExpansionPanel>
         }
-    </MudStack>
+    </MudExpansionPanels>
 
     @if (_totalPages > 1)
     {
@@ -190,7 +231,6 @@ else
 
     private List<SessionGroup> _sessions = new();
     private bool _loading = true;
-    private readonly HashSet<int> _expandedIds = new();
 
     private int _totalCount = 0;
     private int _totalPages = 1;
@@ -236,10 +276,10 @@ else
             .GroupBy(o => o.SessionId)
             .Select(g => new SessionGroup
             {
-                SessionId   = g.Key,
-                TableNumber = g.First().TableNumber,
+                SessionId    = g.Key,
+                TableNumber  = g.First().TableNumber,
                 FirstOrderAt = g.Min(o => o.CreatedAt),
-                Orders      = g.OrderBy(o => o.CreatedAt).ToList()
+                Orders       = g.OrderBy(o => o.CreatedAt).ToList()
             })
             .OrderByDescending(s => s.Orders.Max(o => o.CreatedAt))
             .ToList();
@@ -274,7 +314,7 @@ else
 
     private static (DateTimeOffset? From, DateTimeOffset? To) GetBucketRange(string bucket)
     {
-        var today = DateTime.Today; // local midnight
+        var today = DateTime.Today;
         return bucket switch
         {
             "Today"      => (new DateTimeOffset(today), new DateTimeOffset(today.AddDays(1))),
@@ -284,21 +324,6 @@ else
             "All Time"   => (null, null),
             _            => (new DateTimeOffset(today), new DateTimeOffset(today.AddDays(1)))
         };
-    }
-
-    private void ToggleExpand(int orderId)
-    {
-        if (!_expandedIds.Add(orderId))
-            _expandedIds.Remove(orderId);
-    }
-
-    private static string GetCondensedItems(OrderModel order)
-    {
-        if (order.Items.Count == 0) return "—";
-        var first = order.Items.Take(2).Select(i => $"{i.Quantity}× {i.ItemName}");
-        var summary = string.Join(", ", first);
-        var remaining = order.Items.Count - 2;
-        return remaining > 0 ? $"{summary} +{remaining} more" : summary;
     }
 
     private static Color GetStatusColor(string status) => status switch
