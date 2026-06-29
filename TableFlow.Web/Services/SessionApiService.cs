@@ -10,15 +10,18 @@ public class SessionApiService
     private readonly HttpClient _http;
     private readonly CustomAuthStateProvider _authProvider;
     private readonly UnauthorizedNotifier _notifier;
+    private readonly AppUpdateService _appUpdates;
 
     public SessionApiService(
         IHttpClientFactory httpClientFactory,
         AuthenticationStateProvider authProvider,
-        UnauthorizedNotifier notifier)
+        UnauthorizedNotifier notifier,
+        AppUpdateService appUpdates)
     {
         _http = httpClientFactory.CreateClient("TableFlowApi");
         _authProvider = (CustomAuthStateProvider)authProvider;
         _notifier = notifier;
+        _appUpdates = appUpdates;
     }
 
     private async Task AttachTokenAsync()
@@ -81,6 +84,8 @@ public class SessionApiService
             var json = await res.Content.ReadAsStringAsync();
             var session = System.Text.Json.JsonSerializer.Deserialize<SessionModel>(json,
                 new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (session is not null)
+                _appUpdates.BroadcastSessionOpened(session.TableNumber, session.Id);
             return (true, session, "");
         }
         var error = await res.Content.ReadAsStringAsync();
@@ -156,6 +161,20 @@ public class SessionApiService
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
     }
 
+    public async Task<(bool Success, string Error)> CancelSessionAsync(int sessionId)
+    {
+        await AttachTokenAsync();
+        var res = await _http.PatchAsJsonAsync($"/api/sessions/{sessionId}/cancel", new { });
+        if (await CheckUnauthorizedAsync(res)) return (false, "Unauthorized");
+        if (res.IsSuccessStatusCode)
+        {
+            _appUpdates.BroadcastSessionClosed(sessionId);
+            return (true, "");
+        }
+        var error = await res.Content.ReadAsStringAsync();
+        return (false, error);
+    }
+
     public async Task<(bool Success, SessionModel? Session, string Error)> CloseSessionAsync(
         int sessionId, string paymentMethod, decimal amountReceived)
     {
@@ -166,6 +185,7 @@ public class SessionApiService
         if (res.IsSuccessStatusCode)
         {
             var session = await res.Content.ReadFromJsonAsync<SessionModel>();
+            _appUpdates.BroadcastSessionClosed(sessionId);
             return (true, session, "");
         }
         var error = await res.Content.ReadAsStringAsync();

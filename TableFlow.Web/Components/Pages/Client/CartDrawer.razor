@@ -3,6 +3,7 @@
 @using MudBlazor.Services
 @inject CartService CartService
 @inject OrderApiService OrderApiService
+@inject AppUpdateService AppUpdates
 @inject ISnackbar Snackbar
 @inject IBrowserViewportService BrowserViewportService
 @implements IBrowserViewportObserver
@@ -253,7 +254,10 @@
                                   Style="border-radius:12px; border:1px solid rgba(0,0,0,0.08); overflow:hidden;">
                             <div style="padding:10px 14px; background:#F8FAFC; display:flex; justify-content:space-between; align-items:center;">
                                 <div>
-                                    <MudText Typo="Typo.body2" Style="font-weight:700; color:#1E293B;">@order.OrderNumber</MudText>
+                                    <div style="display:flex; align-items:center; gap:6px;">
+                                        <span style="font-size:0.85rem; font-weight:700; color:#1E293B;">@order.OrderNumber</span>
+                                        <span style="font-size:0.6rem; font-weight:700; background:#0D6B63; color:white; border-radius:100px; padding:2px 6px; flex-shrink:0;">@order.StationName</span>
+                                    </div>
                                     <MudText Typo="Typo.caption" Style="color:#64748B;">@order.CreatedAt.ToLocalTime().ToString("HH:mm")</MudText>
                                 </div>
                                 <span style="font-size:0.65rem; font-weight:700; background:@orderBg; color:white; border-radius:100px; padding:3px 10px; white-space:nowrap;">@orderLabel</span>
@@ -287,6 +291,7 @@
     [Parameter] public bool Open { get; set; }
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
     [Parameter] public int SessionId { get; set; }
+    [Parameter] public Guid? TableToken { get; set; }
     [Parameter] public EventCallback OnOrderPlaced { get; set; }
 
     Guid IBrowserViewportObserver.Id { get; } = Guid.NewGuid();
@@ -304,15 +309,30 @@
     private int _activeTab = 0;
     private List<OrderModel> _sessionOrders = new();
     private bool _ordersLoading = false;
-    private System.Threading.Timer? _ordersTimer;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             CartService.OnCartChanged += OnCartUpdated;
+            AppUpdates.OrdersUpdated += OnOrdersUpdated;
             await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
         }
+    }
+
+    private void OnOrdersUpdated(int sessionId)
+    {
+        if (_activeTab != 1) return; // only refresh when "My Orders" tab is active
+        if (sessionId != -1 && sessionId != SessionId) return;
+        try
+        {
+            InvokeAsync(async () =>
+            {
+                await LoadSessionOrdersAsync();
+                StateHasChanged();
+            });
+        }
+        catch (ObjectDisposedException) { AppUpdates.OrdersUpdated -= OnOrdersUpdated; }
     }
 
     async Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs args)
@@ -339,24 +359,7 @@
     {
         _activeTab = index;
         if (index == 1)
-        {
             await LoadSessionOrdersAsync();
-            _ordersTimer?.Dispose();
-            _ordersTimer = new System.Threading.Timer(async _ =>
-            {
-                if (_disposed) return;
-                await InvokeAsync(async () =>
-                {
-                    await LoadSessionOrdersAsync();
-                    StateHasChanged();
-                });
-            }, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
-        }
-        else
-        {
-            _ordersTimer?.Dispose();
-            _ordersTimer = null;
-        }
     }
 
     private async Task LoadSessionOrdersAsync()
@@ -399,8 +402,9 @@
         if (!CartService.Items.Any()) return;
         _placing = true;
 
-        var (success, order, error) = await OrderApiService.PlaceOrderAsync(
+        var (success, _, error) = await OrderApiService.PlaceOrderAsync(
             SessionId,
+            TableToken ?? Guid.Empty,
             CartService.Items.ToList()
         );
 
@@ -422,7 +426,7 @@
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
-        _ordersTimer?.Dispose();
+        AppUpdates.OrdersUpdated -= OnOrdersUpdated;
         CartService.OnCartChanged -= OnCartUpdated;
         await BrowserViewportService.UnsubscribeAsync(this);
     }

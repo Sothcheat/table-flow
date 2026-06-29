@@ -1,0 +1,67 @@
+@inherits LayoutComponentBase
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject TableFlow.Web.Services.UnauthorizedNotifier UnauthorizedNotifier
+@implements IDisposable
+@using TableFlow.Web.Auth
+@using TableFlow.Web.Themes
+
+<MudThemeProvider Theme="@TableFlowTheme.Theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Color="Color.Primary" Fixed="true">
+        <MudText Typo="Typo.h3" Class="ml-2">TableFlow</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.body2" Class="mr-3">@_userName</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Logout"
+                       Color="Color.Inherit"
+                       OnClick="LogoutAsync" />
+    </MudAppBar>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private string _userName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+            _userName = user.Identity.Name ?? string.Empty;
+
+        UnauthorizedNotifier.OnUnauthorized += HandleUnauthorizedAsync;
+    }
+
+    private async Task HandleUnauthorizedAsync()
+    {
+        var provider = AuthStateProvider as CustomAuthStateProvider;
+        if (provider is not null)
+            await provider.LogoutAsync();
+
+        await InvokeAsync(() => Navigation.NavigateTo("/login", forceLoad: false));
+    }
+
+    private async Task LogoutAsync()
+    {
+        var provider = AuthStateProvider as CustomAuthStateProvider;
+        if (provider is not null)
+            await provider.LogoutAsync();
+
+        Navigation.NavigateTo("/login", forceLoad: false);
+    }
+
+    public void Dispose()
+    {
+        UnauthorizedNotifier.OnUnauthorized -= HandleUnauthorizedAsync;
+    }
+}

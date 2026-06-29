@@ -5,17 +5,20 @@
         int Id,
         string CategoryName,
         int DisplayOrder,
+        string StationName,
         int ItemCount
     );
 
     public record CreateCategoryRequest(
         string CategoryName,
-        int DisplayOrder
+        int DisplayOrder,
+        string StationName
     );
 
     public record UpdateCategoryRequest(
         string CategoryName,
-        int DisplayOrder
+        int DisplayOrder,
+        string StationName
     );
 
     public record MenuItemResponse(

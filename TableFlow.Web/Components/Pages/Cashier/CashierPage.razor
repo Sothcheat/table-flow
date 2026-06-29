@@ -338,6 +338,34 @@ else
                 activeSession = fetched;
             }
 
+            // Check whether any orders exist — determines which flow to show
+            var orders = await OrderApiService.GetSessionOrdersAsync(activeSession.Id);
+
+            if (!orders.Any())
+            {
+                // No orders yet — any cashier can void this (wrong table, customer switched, etc.)
+                var confirmed = await DialogService.ShowMessageBoxAsync(
+                    "No Orders Placed",
+                    $"Table {table.TableNumber} has no orders. Cancel this session and free the table?",
+                    yesText: "Yes, Cancel Session",
+                    cancelText: "Keep Open");
+
+                if (confirmed is not true) return;
+
+                var (cancelOk, cancelError) = await SessionApiService.CancelSessionAsync(activeSession.Id);
+                if (cancelOk)
+                {
+                    await LoadTablesAsync();
+                    Snackbar.Add($"Table {table.TableNumber} session cancelled.", MudBlazor.Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add($"Failed to cancel session: {cancelError}", MudBlazor.Severity.Error);
+                }
+                return;
+            }
+
+            // Has orders — only the opener can close (payment flow)
             if (activeSession.CreatedById != _currentUserId)
             {
                 Snackbar.Add($"Session opened by {activeSession.CreatedByName}. Only they can close it.", MudBlazor.Severity.Warning);

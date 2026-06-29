@@ -9,6 +9,7 @@
 
     public record CreateOrderRequest(
         int SessionId,
+        Guid TableToken,
         string? Note,
         List<OrderItemRequest> Items
     );
@@ -38,8 +39,9 @@
     public record OrderResponse(
         int Id,
         int SessionId,
-        int TableNumber, //i add new field to response to show table number in order list
+        int TableNumber,
         string OrderNumber,
+        string StationName,
         string OrderStatus,
         DateTime CreatedAt,
         string? Note,

@@ -1,11 +1,12 @@
 ﻿@page "/kitchen"
-@layout MainLayout
+@layout KitchenLayout
 @attribute [Authorize(Roles = "Kitchen")]
 @using TableFlow.Web.Models
 @using TableFlow.Web.Services
 @inject OrderApiService OrderApiService
+@inject AppUpdateService AppUpdates
 @inject ISnackbar Snackbar
-@implements IAsyncDisposable
+@implements IDisposable
 
 <style>
     @@keyframes urgency-bounce {
@@ -14,6 +15,7 @@
     }
     .order-urgent { animation: urgency-bounce 1.4s infinite; }
 </style>
+<PageTitle>Kitchen — TableFlow</PageTitle>
 
 <MudText Typo="Typo.h2" Class="mb-4" Style="font-weight:700;">Kitchen</MudText>
 
@@ -24,10 +26,23 @@
     @* ── Queue tab ───────────────────────────────────────────────────── *@
     <MudTabPanel Text="Queue" Icon="@Icons.Material.Filled.Restaurant" BadgeData="@(_orders.Count > 0 ? _orders.Count.ToString() : null)" BadgeColor="Color.Warning">
 
-        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
             <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">
-                @(_orders.Count) active order@(_orders.Count == 1 ? "" : "s")
+                @(FilteredOrders.Count) active order@(FilteredOrders.Count == 1 ? "" : "s")
             </MudText>
+            @if (DistinctStations.Count > 1)
+            {
+                <MudChipSet T="string" SelectionMode="SelectionMode.SingleSelection"
+                            SelectedValue="_stationFilter"
+                            SelectedValueChanged="@((string v) => _stationFilter = v ?? "All")"
+                            Class="mt-2">
+                    <MudChip T="string" Value="@("All")" Color="Color.Default" Variant="Variant.Outlined">All</MudChip>
+                    @foreach (var station in DistinctStations)
+                    {
+                        <MudChip T="string" Value="@station" Color="Color.Primary" Variant="Variant.Outlined">@station</MudChip>
+                    }
+                </MudChipSet>
+            }
         </MudStack>
 
         @if (_loading)
@@ -56,7 +71,7 @@
         else
         {
             <MudGrid>
-                @foreach (var order in _orders)
+                @foreach (var order in FilteredOrders)
                 {
                     <MudItem xs="12" sm="6" md="4" Style="align-self:start">
                         <MudPaper Elevation="0" Class="@GetCardClass(order.CreatedAt)"
@@ -69,8 +84,13 @@
                                         <div style="font-size:1.4rem; font-weight:800; line-height:1.15; color:#0F172A;">
                                             Table @order.TableNumber
                                         </div>
-                                        <div style="font-size:0.72rem; font-weight:500; color:#94A3B8; margin-top:2px; letter-spacing:0.03em;">
-                                            @order.OrderNumber &middot; Session #@order.SessionId
+                                        <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
+                                            <span style="font-size:0.72rem; font-weight:500; color:#94A3B8; letter-spacing:0.03em;">
+                                                @order.OrderNumber
+                                            </span>
+                                            <span style="font-size:0.62rem; font-weight:700; background:#0D6B63; color:white; border-radius:100px; padding:2px 7px; flex-shrink:0;">
+                                                @order.StationName
+                                            </span>
                                         </div>
                                     </div>
                                     <MudChip T="string" Color="@GetStatusColor(order.OrderStatus)" Size="Size.Small"
@@ -180,28 +200,37 @@
     private bool _loading = true;
     private readonly HashSet<int> _updatingOrderIds = new();
     private readonly HashSet<int> _updatingItemIds = new();
-    private System.Threading.Timer? _timer;
 
     private int _activeTab = 0;
     private bool _historyActivated = false;
     private KitchenHistoryPanel? _historyPanel;
 
+    private string _stationFilter = "All";
+
+    private List<OrderModel> FilteredOrders =>
+        _stationFilter == "All" ? _orders : _orders.Where(o => o.StationName == _stationFilter).ToList();
+
+    private List<string> DistinctStations =>
+        _orders.Select(o => o.StationName).Distinct().OrderBy(s => s).ToList();
+
     protected override async Task OnInitializedAsync()
     {
+        AppUpdates.OrdersUpdated += OnOrdersUpdated;
         await LoadOrdersAsync();
     }
 
-    protected override Task OnAfterRenderAsync(bool firstRender)
+    private void OnOrdersUpdated(int sessionId)
     {
-        if (firstRender)
+        // Kitchen shows all active orders — any change in any session needs a refresh
+        try
         {
-            _timer = new System.Threading.Timer(async _ =>
+            InvokeAsync(async () =>
             {
                 await LoadOrdersAsync();
-                await InvokeAsync(StateHasChanged);
-            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+                StateHasChanged();
+            });
         }
-        return Task.CompletedTask;
+        catch (ObjectDisposedException) { AppUpdates.OrdersUpdated -= OnOrdersUpdated; }
     }
 
     private void OnTabChanged()
@@ -334,9 +363,8 @@
         return createdAt.ToString("MMM d, h:mm tt");
     }
 
-    public async ValueTask DisposeAsync()
+    public void Dispose()
     {
-        if (_timer is not null)
-            await _timer.DisposeAsync();
+        AppUpdates.OrdersUpdated -= OnOrdersUpdated;
     }
 }

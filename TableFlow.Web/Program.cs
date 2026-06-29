@@ -77,6 +77,8 @@ builder.Services.AddHttpClient("TableFlowApi", client =>
 
 builder.Services.AddSingleton<IValidator<LoginModel>, LoginValidator>();
 
+builder.Services.AddSingleton<AppUpdateService>();
+
 builder.Services.AddScoped<UnauthorizedNotifier>();
 
 builder.Services.AddScoped<UserApiService>();

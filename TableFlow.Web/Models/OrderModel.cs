@@ -6,6 +6,7 @@ public class OrderModel
     public int SessionId { get; set; }
     public int TableNumber { get; set; } // i add new field to response to show table number in order list
     public string OrderNumber { get; set; } = string.Empty;
+    public string StationName { get; set; } = "Kitchen";
     public string OrderStatus { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public string? Note { get; set; }

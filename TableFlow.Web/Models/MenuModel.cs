@@ -7,6 +7,7 @@ public record CategoryModel
     public int Id { get; set; }
     public string CategoryName { get; set; } = string.Empty;
     public int DisplayOrder { get; set; }
+    public string StationName { get; set; } = "Kitchen";
     public int ItemCount { get; set; }
 }
 
@@ -42,6 +43,7 @@ public class CategoryFormModel
 {
     public string CategoryName { get; set; } = string.Empty;
     public int DisplayOrder { get; set; }
+    public string StationName { get; set; } = "Kitchen";
 }
 
 public class MenuItemFormModel

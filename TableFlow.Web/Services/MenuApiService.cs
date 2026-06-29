@@ -116,12 +116,14 @@ public class MenuApiService
         return await res.Content.ReadFromJsonAsync<MenuItemModel>();
     }
 
-    public async Task<bool> DeleteMenuItemAsync(int id)
+    public async Task<(bool Success, string Error)> DeleteMenuItemAsync(int id)
     {
         await AttachTokenAsync();
         var res = await _http.DeleteAsync($"/api/menu/items/{id}");
-        if (await CheckUnauthorizedAsync(res)) return false;
-        return res.IsSuccessStatusCode;
+        if (await CheckUnauthorizedAsync(res)) return (false, "Unauthorized");
+        if (res.IsSuccessStatusCode) return (true, "");
+        var error = await res.Content.ReadAsStringAsync();
+        return (false, error);
     }
 
     public async Task<MenuItemModel?> GetMenuItemByIdAsync(int id)
