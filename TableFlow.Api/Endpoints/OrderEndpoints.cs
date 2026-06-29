@@ -355,6 +355,23 @@ namespace TableFlow.Api.Endpoints
                     return Results.BadRequest("Invalid order status.");
 
                 order.OrderStatus = newStatus;
+
+                // Keep item statuses in sync with the order transition
+                foreach (var item in order.OrderItems)
+                {
+                    if (item.OrderItemStatus == OrderItemStatus.Unavailable ||
+                        item.OrderItemStatus == OrderItemStatus.Cancelled)
+                        continue;
+
+                    item.OrderItemStatus = newStatus switch
+                    {
+                        OrderStatus.Preparing => OrderItemStatus.Preparing,
+                        OrderStatus.Ready     => OrderItemStatus.Done,
+                        OrderStatus.Served    => OrderItemStatus.Delivered,
+                        _                     => item.OrderItemStatus
+                    };
+                }
+
                 await db.SaveChangesAsync();
 
                 await hub.Clients.All.SendAsync("OrdersUpdated", order.SessionId);

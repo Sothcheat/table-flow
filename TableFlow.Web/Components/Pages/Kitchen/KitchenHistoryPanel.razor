@@ -108,17 +108,17 @@ else
 
                 <MudDivider />
 
-                <MudTable Items="session.Orders" Hover="true" Dense="false" Elevation="0">
+                <MudTable Items="session.Orders" Hover="true" Dense="false" Elevation="0" Style="table-layout:fixed;">
                     <HeaderContent>
-                        <MudTh>Order #</MudTh>
+                        <MudTh Style="width:160px">Order #</MudTh>
                         <MudTh>Items</MudTh>
-                        <MudTh>Received</MudTh>
-                        <MudTh>Status</MudTh>
-                        <MudTh></MudTh>
+                        <MudTh Style="width:120px">Received</MudTh>
+                        <MudTh Style="width:130px">Status</MudTh>
+                        <MudTh Style="width:52px"></MudTh>
                     </HeaderContent>
                     <RowTemplate Context="order">
-                        <MudTd>@order.OrderNumber</MudTd>
-                        <MudTd>@GetCondensedItems(order)</MudTd>
+                        <MudTd Style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@order.OrderNumber</MudTd>
+                        <MudTd Style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@GetCondensedItems(order)</MudTd>
                         <MudTd>@order.CreatedAt.ToLocalTime().ToString("h:mm tt")</MudTd>
                         <MudTd>
                             <MudChip T="string" Color="@GetStatusColor(order.OrderStatus)" Size="Size.Small">
