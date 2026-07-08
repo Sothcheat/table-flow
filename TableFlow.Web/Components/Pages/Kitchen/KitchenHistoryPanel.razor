@@ -171,6 +171,12 @@ else
                                                     {
                                                         <span style="font-size:0.6rem; font-weight:700; background:#94A3B8; color:white; border-radius:100px; padding:1px 6px;">VOID</span>
                                                     }
+                                                    @if (!string.IsNullOrWhiteSpace(item.Note))
+                                                    {
+                                                        <span style="display:flex; align-items:center; gap:3px; font-size:0.72rem; font-weight:600; color:#D97706;">
+                                                            <MudIcon Icon="@Icons.Material.Outlined.Notes" Style="font-size:0.8rem; color:#D97706;" />@item.Note
+                                                        </span>
+                                                    }
                                                 </div>
                                                 <div style="font-size:0.8rem; color:#475569; width:36px; text-align:center; font-weight:600; flex-shrink:0;">×@item.Quantity</div>
                                                 <div style="font-size:0.8rem; color:#475569; width:60px; text-align:right; flex-shrink:0;">$@item.UnitPrice.ToString("0.00")</div>
