@@ -273,6 +273,13 @@
                                             {
                                                 <div style="font-size:0.7rem; color:#6366F1;">@item.VarientName</div>
                                             }
+                                            @if (!string.IsNullOrWhiteSpace(item.Note))
+                                            {
+                                                <div style="display:flex; align-items:center; gap:3px; margin-top:2px;">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Notes" Style="font-size:0.8rem; color:#D97706;" />
+                                                    <span style="font-size:0.72rem; color:#D97706; font-weight:600;">@item.Note</span>
+                                                </div>
+                                            }
                                         </div>
                                         <span style="font-size:0.75rem; color:#64748B; margin-left:8px;">×@item.Quantity</span>
                                     </div>

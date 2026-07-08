@@ -14,11 +14,9 @@
         public decimal TotalPrice => UnitPrice * Quantity;
 
         // Unique key to identify this cart line
-        // Same item + same variant = same line (quantity increases)
-        // Same item + different variant = different line
-        public string Key => VarientId.HasValue
-            ? $"{MenuItemId}-{VarientId}"
-            : $"{MenuItemId}";
+        // Same item + same variant + same note = same line (quantity increases)
+        // Same item + different variant or note = different line
+        public string Key => $"{MenuItemId}-{VarientId?.ToString() ?? "0"}-{Note ?? ""}";
     }
 
     public class CartService

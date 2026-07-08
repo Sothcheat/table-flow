@@ -121,13 +121,22 @@
                                             <span style="font-size:0.9rem; font-weight:800; min-width:26px; color:@(unavailable ? "#EF4444" : "#0D6B63");">
                                                 @item.Quantity×
                                             </span>
-                                            <span style="font-size:0.95rem; font-weight:500; color:@(unavailable ? "#EF4444" : "#1E293B"); text-decoration:@(unavailable ? "line-through" : "none");">
-                                                @item.ItemName@(item.VarientName is not null ? $" ({item.VarientName})" : "")
-                                            </span>
-                                            @if (unavailable)
-                                            {
-                                                <span style="font-size:0.62rem; font-weight:700; background:#EF4444; color:white; border-radius:100px; padding:2px 7px; flex-shrink:0;">OUT</span>
-                                            }
+                                            <div style="min-width:0;">
+                                                <span style="font-size:0.95rem; font-weight:500; color:@(unavailable ? "#EF4444" : "#1E293B"); text-decoration:@(unavailable ? "line-through" : "none");">
+                                                    @item.ItemName@(item.VarientName is not null ? $" ({item.VarientName})" : "")
+                                                </span>
+                                                @if (unavailable)
+                                                {
+                                                    <span style="font-size:0.62rem; font-weight:700; background:#EF4444; color:white; border-radius:100px; padding:2px 7px; flex-shrink:0;">OUT</span>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(item.Note))
+                                                {
+                                                    <div style="display:flex; align-items:center; gap:4px; margin-top:1px;">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.Notes" Style="font-size:0.85rem; color:#D97706;" />
+                                                        <span style="font-size:0.8rem; font-weight:600; color:#D97706;">@item.Note</span>
+                                                    </div>
+                                                }
+                                            </div>
                                         </div>
                                         @if (!unavailable && item.OrderItemStatus != "Done")
                                         {

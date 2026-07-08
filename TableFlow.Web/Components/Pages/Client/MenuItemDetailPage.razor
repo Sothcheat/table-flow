@@ -205,6 +205,15 @@ else
                 }
             }
 
+            @* Special Request Note *@
+            <MudText Typo="Typo.h6" Style="font-weight:600;" Class="mt-4 mb-2">Special request (optional)</MudText>
+            <MudTextField @bind-Value="_note"
+                          Placeholder="e.g. no pickle, less spicy"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          MaxLength="200"
+                          FullWidth="true" />
+
             </div> @* end detail-body *@
 
             <div class="add-cta">
@@ -252,6 +261,7 @@ else
     private CartDrawer _cartDrawer = null!;
     private int _quantity = 1;
     private VarientModel? _selectedVariant = null;
+    private string? _note;
     private bool _cartOpen = false;
 
     private MenuSessionState _state = MenuSessionState.Loading;
@@ -356,12 +366,14 @@ else
             VarientId = _selectedVariant.Id,
             VarientName = _selectedVariant.VarientName,
             UnitPrice = _selectedVariant.Price,
-            Quantity = _quantity
+            Quantity = _quantity,
+            Note = string.IsNullOrWhiteSpace(_note) ? null : _note.Trim()
         });
 
         Snackbar.Add($"{_item.ItemName} added to cart.", MudBlazor.Severity.Success);
         _quantity = 1;
         _selectedVariant = null;
+        _note = null;
     }
 
     private void OnOrderPlaced()
